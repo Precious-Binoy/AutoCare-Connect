@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Google OAuth - AutoCare Connect</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 2rem;
+        }
+
+        .log-box {
+            background: #1E293B;
+            color: #E2E8F0;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+
+        .log-entry {
+            margin-bottom: 0.5rem;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .log-success {
+            color: #10B981;
+        }
+
+        .log-error {
+            color: #EF4444;
+        }
+
+        .log-info {
+            color: #3B82F6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="test-container">
+        <div class="card p-8">
+            <h1 class="text-3xl font-bold mb-4">Google OAuth Test Page</h1>
+            <p class="text-muted mb-6">This page helps debug Google Sign-In integration.</p>
+
+            <div id="googleButtonDiv" style="margin-bottom: 2rem;"></div>
+
+            <h3 class="font-bold mb-2">Debug Console:</h3>
+            <div id="logBox" class="log-box">
+                <div class="log-entry log-info">Waiting for Google Sign-In...</div>
+            </div>
+
+            <div class="mt-4">
+                <button onclick="clearLogs()" class="btn btn-outline btn-sm">Clear Logs</button>
+                <a href="login.php" class="btn btn-primary btn-sm">Go to Login Page</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addLog(message, type = 'info') {
+            const logBox = document.getElementById('logBox');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry log-' + type;
+            entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logBox').innerHTML = '<div class="log-entry log-info">Logs cleared</div>';
+        }
+
+        function handleCredentialResponse(response) {
+            addLog('✓ Google Sign-In response received', 'success');
+            addLog('Credential length: ' + response.credential.length, 'info');
+
+            // Decode the JWT to show user info
+            try {
+                const parts = response.credential.split('.');
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                addLog('User email: ' + payload.email, 'info');
+                addLog('User name: ' + payload.name, 'info');
+            } catch (e) {
+                addLog('Could not decode JWT: ' + e.message, 'error');
+            }
+
+            addLog('Sending to backend API...', 'info');
+
+            fetch('api/google_login.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential: response.credential })
+            })
+                .then(res => {
+                    addLog('Response status: ' + res.status, res.ok ? 'success' : 'error');
+                    return res.json();
+                })
+                .then(data => {
+                    addLog('Backend response received', 'success');
+                    addLog('Success: ' + data.success, data.success ? 'success' : 'error');
+                    addLog('Message: ' + data.message, data.success ? 'success' : 'error');
+
+                    if (data.debug) {
+                        addLog('Debug info: ' + JSON.stringify(data.debug), 'error');
+                    }
+
+                    if (data.success) {
+                        addLog('✓ Login successful! Redirecting...', 'success');
+                        setTimeout(() => {
+                            window.location.href = data.redirect || 'customer_dashboard.php';
+                        }, 1500);
+                    } else {
+                        addLog('✗ Login failed: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    addLog('✗ Network error: ' + error.message, 'error');
+                    addLog('Make sure XAMPP Apache is running', 'error');
+                });
+        }
+
+        window.onload = function () {
+            try {
+                addLog('Initializing Google Sign-In...', 'info');
+
+                google.accounts.id.initialize({
+                    client_id: '498753295346-jnh8q2qlnrbdbjit9add5nmfef3cc2lr.apps.googleusercontent.com',
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
+                });
+
+                addLog('✓ Google Sign-In initialized', 'success');
+
+                google.accounts.id.renderButton(
+                    document.getElementById('googleButtonDiv'),
+                    {
+                        theme: 'outline',
+                        size: 'large',
+                        width: '350',
+                        text: 'continue_with',
+                        shape: 'rectangular',
+                        logo_alignment: 'left'
+                    }
+                );
+
+                addLog('✓ Google button rendered', 'success');
+                addLog('Ready! Click the button above to test.', 'success');
+
+            } catch (error) {
+                addLog('✗ Initialization error: ' + error.message, 'error');
+            }
+        };
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Setup - AutoCare Connect</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 2rem;
+        }
+
+        .step {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #3B82F6;
+        }
+
+        .step.success {
+            border-left-color: #10B981;
+            background: #F0FDF4;
+        }
+
+        .step.error {
+            border-left-color: #EF4444;
+            background: #FEF2F2;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold mb-6">AutoCare Connect - Quick Setup</h1>
+
+        <div id="step1" class="step">
+            <h3 class="font-bold mb-2"><i class="fa-solid fa-1"></i> Initialize Database</h3>
+            <p class="text-sm text-muted mb-3">Click below to set up the database</p>
+            <button onclick="setupDatabase()" id="dbBtn" class="btn btn-primary">
+                <i class="fa-solid fa-database"></i> Setup Database
+            </button>
+            <div id="dbResult" class="mt-2"></div>
+        </div>
+
+        <div id="step2" class="step" style="opacity: 0.5;">
+            <h3 class="font-bold mb-2"><i class="fa-solid fa-2"></i> Test Login</h3>
+            <p class="text-sm text-muted mb-3">Use sample account or Google</p>
+            <div id="loginOptions" style="display: none;">
+                <a href="login.php" class="btn btn-outline btn-sm">
+                    <i class="fa-solid fa-arrow-right"></i> Go to Login
+                </a>
+                <div class="mt-2 text-sm">
+                    <strong>Sample Account:</strong><br>
+                    Email: john@example.com<br>
+                    Password: password123
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function setupDatabase() {
+            const btn = document.getElementById('dbBtn');
+            const result = document.getElementById('dbResult');
+            const step1 = document.getElementById('step1');
+            const step2 = document.getElementById('step2');
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Setting up...';
+            result.innerHTML = '';
+
+            fetch('database/setup_db.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        result.innerHTML = '<div class="alert alert-success mt-2"><i class="fa-solid fa-check"></i> ' + data.message + '</div>';
+                        step1.classList.add('success');
+                        step2.style.opacity = '1';
+                        document.getElementById('loginOptions').style.display = 'block';
+                        btn.innerHTML = '<i class="fa-solid fa-check"></i> Database Ready!';
+                        btn.style.background = '#10B981';
+                    } else {
+                        result.innerHTML = '<div class="alert alert-error mt-2"><i class="fa-solid fa-times"></i> ' + data.message + '</div>';
+                        step1.classList.add('error');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fa-solid fa-database"></i> Try Again';
+                    }
+                })
+                .catch(error => {
+                    result.innerHTML = '<div class="alert alert-error mt-2"><i class="fa-solid fa-times"></i> Error: Make sure XAMPP MySQL is running</div>';
+                    step1.classList.add('error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-database"></i> Try Again';
+                });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,28 @@
+<?php
+require '../config/firebase.php';
+
+$idToken = $_POST['idToken'] ?? null;
+
+if (!$idToken) {
+    echo json_encode(["status" => "error", "message" => "No token"]);
+    exit;
+}
+
+try {
+    $verifiedToken = $auth->verifyIdToken($idToken);
+    $uid = $verifiedToken->claims()->get('sub');
+
+    $user = $auth->getUser($uid);
+
+    echo json_encode([
+        "status" => "success",
+        "uid" => $uid,
+        "email" => $user->email,
+        "name" => $user->displayName
+    ]);
+} catch (Exception $e) {
+    echo json_encode([
+        "status" => "error",
+        "message" => $e->getMessage()
+    ]);
+}

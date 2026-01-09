@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Setup - AutoCare Connect</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .setup-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 2rem;
+        }
+        .status-box {
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            display: none;
+        }
+        .status-success {
+            background: #D1FAE5;
+            border: 1px solid #10B981;
+            color: #065F46;
+        }
+        .status-error {
+            background: #FEE2E2;
+            border: 1px solid #EF4444;
+            color: #991B1B;
+        }
+        .status-info {
+            background: #DBEAFE;
+            border: 1px solid #3B82F6;
+            color: #1E3A8A;
+        }
+        pre {
+            background: #F8FAFC;
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="card p-8">
+            <h1 class="text-3xl font-bold mb-2">AutoCare Connect - Database Setup</h1>
+            <p class="text-muted mb-6">Click the button below to initialize the database and create sample data.</p>
+
+            <div id="statusBox" class="status-box"></div>
+
+            <button id="setupBtn" class="btn btn-primary w-full mb-4">
+                <i class="fa-solid fa-database"></i> Initialize Database
+            </button>
+
+            <div class="mt-6">
+                <h3 class="font-bold mb-2">What this does:</h3>
+                <ul class="text-sm text-muted" style="list-style: disc; margin-left: 1.5rem;">
+                    <li>Creates the <code>autocare_connect</code> database</li>
+                    <li>Creates 8 tables: users, vehicles, bookings, mechanics, service_updates, pickup_delivery, password_resets, notifications</li>
+                    <li>Adds sample users and data for testing</li>
+                </ul>
+
+                <div class="mt-4 p-4" style="background: #F8FAFC; border-radius: 8px;">
+                    <h4 class="font-bold text-sm mb-2">Sample Login Credentials:</h4>
+                    <pre>Customer: john@example.com / password123
+Admin: admin@autocare.com / admin123
+Mechanic: mike@autocare.com / mechanic123</pre>
+                </div>
+
+                <div class="mt-4">
+                    <a href="login.php" class="btn btn-outline w-full">Go to Login Page</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('setupBtn').addEventListener('click', function() {
+            const btn = this;
+            const statusBox = document.getElementById('statusBox');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Setting up...';
+            
+            fetch('database/setup_db.php')
+                .then(response => response.json())
+                .then(data => {
+                    statusBox.style.display = 'block';
+                    
+                    if (data.success) {
+                        statusBox.className = 'status-box status-success';
+                        statusBox.innerHTML = '<i class="fa-solid fa-check-circle"></i> ' + data.message + '<br><small>You can now login with the sample credentials below.</small>';
+                        btn.innerHTML = '<i class="fa-solid fa-check"></i> Database Initialized!';
+                        btn.style.background = '#10B981';
+                    } else {
+                        statusBox.className = 'status-box status-error';
+                        statusBox.innerHTML = '<i class="fa-solid fa-exclamation-circle"></i> Error: ' + (data.message || 'Unknown error occurred');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fa-solid fa-database"></i> Try Again';
+                    }
+                })
+                .catch(error => {
+                    statusBox.style.display = 'block';
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = '<i class="fa-solid fa-exclamation-circle"></i> Network error. Make sure XAMPP MySQL is running.<br><small>' + error + '</small>';
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-database"></i> Try Again';
+                });
+        });
+    </script>
+</body>
+</html>

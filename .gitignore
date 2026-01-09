@@ -1,0 +1,11 @@
+# Credentials and Keys
+config/firebase-key.json
+.env
+
+# Dependencies
+vendor/
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
