@@ -60,7 +60,10 @@ function getStatusBadgeClass($status) {
         'completed' => 'badge-success',
         'cancelled' => 'badge-danger',
         'scheduled' => 'badge-info',
-        'in_transit' => 'badge-primary'
+        'in_transit' => 'badge-primary',
+        'ready_for_delivery' => 'badge-warning',
+        'delivered' => 'badge-success',
+        'repaired' => 'badge-success'
     ];
     
     return $classes[$status] ?? 'badge-secondary';
@@ -135,5 +138,23 @@ function uploadFile($file, $uploadDir = 'uploads/', $allowedTypes = ['jpg', 'jpe
         'filename' => $filename,
         'path' => $destination
     ];
+}
+
+/**
+ * Get vehicle image based on type
+ * @param string $type
+ * @return string
+ */
+function getVehicleImage($type) {
+    $images = [
+        'sedan' => 'https://images.unsplash.com/photo-1550355291-bbee04a92027?auto=format&fit=crop&w=800&q=80',
+        'suv' => 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=800&q=80',
+        'truck' => 'https://images.unsplash.com/photo-1586191582056-94033be1556a?auto=format&fit=crop&w=800&q=80',
+        'coupe' => 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?auto=format&fit=crop&w=800&q=80',
+        'hatchback' => 'https://images.unsplash.com/photo-1592198084033-aade902d1aae?auto=format&fit=crop&w=800&q=80',
+        'van' => 'https://images.unsplash.com/photo-1532938421977-4ad7130e82f1?auto=format&fit=crop&w=800&q=80'
+    ];
+    
+    return $images[strtolower($type)] ?? 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=800&q=80';
 }
 ?>

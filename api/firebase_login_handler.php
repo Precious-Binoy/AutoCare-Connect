@@ -186,10 +186,20 @@ try {
     $_SESSION['firebase_uid'] = $uid; // Store Firebase UID in session for reference
     $_SESSION['last_activity'] = time();
 
+    // Determine redirect URL
+    $redirect = 'customer_dashboard.php';
+    if ($_SESSION['user_role'] === 'admin') {
+        $redirect = 'admin_dashboard.php';
+    } elseif ($_SESSION['user_role'] === 'driver') {
+        $redirect = 'driver_dashboard.php';
+    } elseif ($_SESSION['user_role'] === 'mechanic') {
+        $redirect = 'mechanic_dashboard.php';
+    }
+
     echo json_encode([
         'success' => true, 
         'message' => 'Login Successful',
-        'redirect' => ($_SESSION['user_role'] === 'admin') ? 'admin_dashboard.php' : 'customer_dashboard.php'
+        'redirect' => $redirect
     ]);
 
 } catch (FailedToVerifyToken $e) {

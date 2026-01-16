@@ -15,6 +15,7 @@
             <a href="index.php#home">Home</a>
             <a href="index.php#services">Services</a>
             <a href="index.php#about">About</a>
+            <a href="careers.php">Careers</a>
             <a href="index.php#contact">Contact</a>
         </div>
 

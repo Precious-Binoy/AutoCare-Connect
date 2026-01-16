@@ -19,7 +19,7 @@
                 <p class="hero-subtitle">From seamless booking to pickup & delivery tracking. The all-in-one platform for drivers and mechanics that modernizes auto repair.</p>
                 <div class="flex gap-2">
                     <a href="login.php" class="btn btn-primary">Book a Service</a>
-                    <a href="register.php" class="btn btn-secondary" style="background: #E2E8F0; color: #1E293B;">Partner with Us</a>
+                    <a href="careers.php" class="btn btn-secondary" style="background: #E2E8F0; color: #1E293B;">Partner with Us</a>
                 </div>
                 <div class="flex items-center gap-2 mt-4 text-sm text-primary font-medium">
                     <i class="fa-solid fa-circle-check"></i> Trusted by 500+ Local Workshops

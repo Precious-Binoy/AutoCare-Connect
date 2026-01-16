@@ -1,10 +1,18 @@
 <?php
-// Check if user is admin
-$isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+// Check user role
+$userRole = $_SESSION['user_role'] ?? 'customer';
+$isAdmin = $userRole === 'admin';
+$isMechanic = $userRole === 'mechanic';
+$isDriver = $userRole === 'driver';
 ?>
 <aside class="sidebar">
     <div class="sidebar-logo">
-        <a href="<?php echo $isAdmin ? 'admin_dashboard.php' : 'customer_dashboard.php'; ?>" class="flex items-center gap-2">
+        <a href="<?php 
+            if ($isAdmin) echo 'admin_dashboard.php';
+            elseif ($isMechanic) echo 'mechanic_dashboard.php';
+            elseif ($isDriver) echo 'driver_dashboard.php';
+            else echo 'customer_dashboard.php';
+        ?>" class="flex items-center gap-2">
             <div style="width: 32px; height: 32px; background: var(--primary); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white;">
                 <i class="fa-solid fa-car-side"></i>
             </div>
@@ -27,6 +35,28 @@ $isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
             <a href="admin_drivers.php" class="nav-item <?php echo ($current_page == 'admin_drivers.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-truck"></i> Manage Drivers
             </a>
+            <a href="admin_job_requests.php" class="nav-item <?php echo ($current_page == 'admin_job_requests.php') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-id-card"></i> Job Requests
+            </a>
+        <?php elseif ($isMechanic): ?>
+            <!-- Mechanic Navigation -->
+            <a href="mechanic_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'jobs') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-screwdriver-wrench"></i> My Jobs
+            </a>
+            <a href="mechanic_dashboard.php?tab=history" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'history') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-clock-rotate-left"></i> Service History
+            </a>
+            <a href="mechanic_dashboard.php?tab=profile" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'profile') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-user-gear"></i> Profile Settings
+            </a>
+        <?php elseif ($isDriver): ?>
+            <!-- Driver Navigation -->
+            <a href="driver_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'jobs') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-gauge"></i> Dashboard
+            </a>
+            <a href="driver_dashboard.php?tab=history" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'history') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-history"></i> History
+            </a>
         <?php else: ?>
             <!-- Customer Navigation -->
             <a href="customer_dashboard.php" class="nav-item <?php echo ($current_page == 'customer_dashboard.php') ? 'active' : ''; ?>">
@@ -34,6 +64,9 @@ $isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
             </a>
             <a href="my_vehicles.php" class="nav-item <?php echo ($current_page == 'my_vehicles.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-car"></i> My Vehicles
+            </a>
+            <a href="history.php" class="nav-item <?php echo ($current_page == 'history.php') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-clock-rotate-left"></i> Service History
             </a>
             <a href="book_service.php" class="nav-item <?php echo ($current_page == 'book_service.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-calendar-plus"></i> Book Service

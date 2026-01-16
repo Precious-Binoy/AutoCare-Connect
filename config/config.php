@@ -20,6 +20,9 @@ define('PASSWORD_MIN_LENGTH', 6);
 define('GOOGLE_CLIENT_ID', '498753295346-jnh8q2qlnrbdbjit9add5nmfef3cc2lr.apps.googleusercontent.com');
 define('GOOGLE_CLIENT_SECRET', ''); // Add your client secret here
 
+// Maps Configuration
+define('GOOGLE_MAPS_API_KEY', 'YOUR_GOOGLE_MAPS_API_KEY_HERE');
+
 // Timezone
 date_default_timezone_set('Asia/Kolkata');
 

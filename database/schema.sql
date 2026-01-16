@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) NOT NULL UNIQUE,
     phone VARCHAR(20),
     password VARCHAR(255),
-    role ENUM('customer', 'mechanic', 'admin') DEFAULT 'customer',
+    role ENUM('customer', 'mechanic', 'admin', 'driver') DEFAULT 'customer',
     google_id VARCHAR(100) UNIQUE,
     profile_image VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -67,6 +67,37 @@ CREATE TABLE IF NOT EXISTS mechanics (
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Drivers table
+CREATE TABLE IF NOT EXISTS drivers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    license_number VARCHAR(50),
+    vehicle_type VARCHAR(50),
+    is_available BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Job Requests table
+CREATE TABLE IF NOT EXISTS job_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    role_requested ENUM('mechanic', 'driver') NOT NULL,
+    experience_years INT,
+    qualifications TEXT,
+    password_hash VARCHAR(255) NOT NULL,
+    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+    admin_comments TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_email (email),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Bookings table
 CREATE TABLE IF NOT EXISTS bookings (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -80,7 +111,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     preferred_date DATETIME NOT NULL,
     scheduled_date DATETIME,
     completion_date DATETIME,
-    status ENUM('pending', 'confirmed', 'in_progress', 'completed', 'cancelled') DEFAULT 'pending',
+    status ENUM('pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'ready_for_delivery', 'delivered') DEFAULT 'pending',
     priority ENUM('low', 'normal', 'high', 'urgent') DEFAULT 'normal',
     estimated_cost DECIMAL(10, 2),
     final_cost DECIMAL(10, 2),
@@ -124,6 +155,7 @@ CREATE TABLE IF NOT EXISTS pickup_delivery (
     scheduled_time DATETIME,
     actual_time DATETIME,
     status ENUM('pending', 'scheduled', 'in_transit', 'completed', 'cancelled') DEFAULT 'pending',
+    driver_user_id INT,
     driver_name VARCHAR(100),
     driver_phone VARCHAR(20),
     vehicle_number VARCHAR(20),
@@ -132,6 +164,7 @@ CREATE TABLE IF NOT EXISTS pickup_delivery (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    FOREIGN KEY (driver_user_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_booking_id (booking_id),
     INDEX idx_type (type),
     INDEX idx_status (status)

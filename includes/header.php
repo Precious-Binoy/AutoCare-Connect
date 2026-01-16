@@ -15,7 +15,7 @@
             <?php if ($isAdmin): ?>
                 <a href="admin_dashboard.php">Dashboard</a>
                 <a href="admin_bookings.php" class="text-primary">Bookings</a>
-            <?php else: ?>
+            <?php elseif (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'customer'): ?>
                 <a href="customer_dashboard.php">Dashboard</a>
                 <a href="my_vehicles.php" class="text-primary">My Vehicles</a>
             <?php endif; ?>

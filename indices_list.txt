@@ -1,0 +1,6 @@
+Indexes for users table:
+Table: users | Non_unique: 0 | Key_name: PRIMARY | Column_name: id
+Table: users | Non_unique: 0 | Key_name: email | Column_name: email
+Table: users | Non_unique: 0 | Key_name: google_id | Column_name: google_id
+Table: users | Non_unique: 1 | Key_name: idx_email | Column_name: email
+Table: users | Non_unique: 1 | Key_name: idx_google_id | Column_name: google_id
