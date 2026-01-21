@@ -13,19 +13,19 @@ $page_title = 'Manage Bookings';
 // Fetch statistics
 $pendingQuery = "SELECT COUNT(*) as count FROM bookings WHERE status = 'pending'";
 $pendingResult = executeQuery($pendingQuery, [], '');
-$pendingCount = $pendingResult ? $pendingResult->fetch_assoc()['count'] : 0;
+$pendingCount = ($pendingResult && $row = $pendingResult->fetch_assoc()) ? $row['count'] : 0;
 
 $inProgressQuery = "SELECT COUNT(*) as count FROM bookings WHERE status = 'in_progress'";
 $inProgressResult = executeQuery($inProgressQuery, [], '');
-$inProgressCount = $inProgressResult ? $inProgressResult->fetch_assoc()['count'] : 0;
+$inProgressCount = ($inProgressResult && $row = $inProgressResult->fetch_assoc()) ? $row['count'] : 0;
 
-$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE status = 'completed' AND DATE(completion_date) = CURDATE()";
+$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE (status = 'completed' OR status = 'delivered') AND DATE(completion_date) = CURDATE()";
 $completedTodayResult = executeQuery($completedTodayQuery, [], '');
-$completedToday = $completedTodayResult ? $completedTodayResult->fetch_assoc()['count'] : 0;
+$completedToday = ($completedTodayResult && $row = $completedTodayResult->fetch_assoc()) ? $row['count'] : 0;
 
-$activeDriversQuery = "SELECT COUNT(DISTINCT driver_name) as count FROM pickup_delivery WHERE status IN ('in_transit', 'scheduled')";
+$activeDriversQuery = "SELECT COUNT(DISTINCT driver_user_id) as count FROM pickup_delivery WHERE status IN ('in_transit', 'scheduled')";
 $activeDriversResult = executeQuery($activeDriversQuery, [], '');
-$activeDrivers = $activeDriversResult ? $activeDriversResult->fetch_assoc()['count'] : 0;
+$activeDrivers = ($activeDriversResult && $row = $activeDriversResult->fetch_assoc()) ? $row['count'] : 0;
 
 // Fetch all bookings with related data
 $bookingsQuery = "SELECT 
@@ -34,6 +34,8 @@ $bookingsQuery = "SELECT
                     b.status,
                     b.preferred_date,
                     b.service_type,
+                    b.mechanic_fee,
+                    b.final_cost as total_bill,
                     u.name as customer_name,
                     u.email as customer_email,
                     CONCAT(v.make, ' ', v.model) as vehicle,
@@ -52,10 +54,16 @@ $bookingsQuery = "SELECT
                   ORDER BY b.created_at DESC
                   LIMIT 50";
 $bookingsResult = executeQuery($bookingsQuery, [], '');
-$bookings = [];
+$activeBookings = [];
+$bookingHistory = [];
+
 if ($bookingsResult) {
     while ($row = $bookingsResult->fetch_assoc()) {
-        $bookings[] = $row;
+        if (in_array($row['status'], ['completed', 'delivered', 'cancelled'])) {
+            $bookingHistory[] = $row;
+        } else {
+            $activeBookings[] = $row;
+        }
     }
 }
 
@@ -108,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if (isset($_POST['action']) && $_POST['action'] === 'assign_driver') {
         $booking_id = intval($_POST['booking_id']);
+        $pd_id = intval($_POST['pd_id']);
         $driver_user_id = intval($_POST['driver_user_id']);
         
         $conn->begin_transaction();
@@ -118,12 +127,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dStmt->execute();
             $dRes = $dStmt->get_result()->fetch_assoc();
             
-            // Assign Driver (Update all logistics tasks for this booking)
-            $stmt = $conn->prepare("UPDATE pickup_delivery SET driver_user_id = ?, driver_name = ?, driver_phone = ?, status = 'scheduled' WHERE booking_id = ?");
-            $stmt->bind_param("issi", $driver_user_id, $dRes['name'], $dRes['phone'], $booking_id);
+            // Assign Driver to SPECIFIC task (using pd_id)
+            $stmt = $conn->prepare("UPDATE pickup_delivery SET driver_user_id = ?, driver_name = ?, driver_phone = ?, status = 'scheduled' WHERE id = ?");
+            $stmt->bind_param("issi", $driver_user_id, $dRes['name'], $dRes['phone'], $pd_id);
             $stmt->execute();
 
-            // Mark Driver as Busy
+            // Mark Driver as Busy (keep this logic if drivers are limited to one task at a time)
             $stmt = $conn->prepare("UPDATE drivers SET is_available = FALSE WHERE user_id = ?");
             $stmt->bind_param("i", $driver_user_id);
             $stmt->execute();
@@ -190,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <span class="text-info text-xl"><i class="fa-solid fa-screwdriver-wrench"></i></span>
                          </div>
                     </div>
-                     <div class="card p-4">
+                    <div class="card p-4">
                          <div class="flex justify-between">
                             <div>
                                 <span class="text-muted text-sm font-medium">Completed Today</span>
@@ -204,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      <div class="card p-4 bg-primary text-white border-none">
                           <div class="flex justify-between">
                              <div>
-                                 <span class="opacity-80 text-sm font-medium">Drivers Available</span>
+                                 <span class="opacity-80 text-sm font-medium">Active Workers</span>
                                  <div class="flex items-end gap-2 mt-1">
                                      <span class="text-3xl font-bold"><?php echo $activeDrivers; ?></span>
                                  </div>
@@ -231,8 +240,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
 
-                <!-- Bookings Table -->
-                <div class="card" style="padding: 0; overflow: hidden;">
+                <!-- Active Bookings -->
+                <div class="mb-4">
+                    <h2 class="text-xl font-bold mb-2">Active Bookings</h2>
+                    <p class="text-sm text-muted">Manage ongoing services and assignments.</p>
+                </div>
+                <div class="card mb-8" style="padding: 0; overflow: hidden;">
                      <div style="overflow-x: auto;">
                         <table class="w-full text-left" style="min-width: 800px;">
                             <thead style="background: #F8FAFC; border-bottom: 1px solid var(--border);">
@@ -240,25 +253,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Booking ID</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Customer & Vehicle</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Service</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Date/Time</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Date</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Status</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Mechanic</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Driver Selection</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Assignee Info</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Logistics Summary</th>
                                 </tr>
                             </thead>
                             <tbody class="text-sm">
-                                <?php if (empty($bookings)): ?>
+                                <?php if (empty($activeBookings)): ?>
                                     <tr>
-                                        <td colspan="7" class="p-4 text-center text-muted">No bookings found.</td>
+                                        <td colspan="7" class="p-4 text-center text-muted italic">No active bookings under management.</td>
                                     </tr>
                                 <?php else: ?>
-                                    <?php foreach ($bookings as $booking): ?>
+                                    <?php foreach ($activeBookings as $booking): ?>
                                         <?php
                                         $badgeClass = 'badge-info';
                                         if ($booking['status'] === 'pending') $badgeClass = 'badge-warning';
                                         elseif ($booking['status'] === 'in_progress') $badgeClass = 'badge-info';
-                                        elseif ($booking['status'] === 'completed') $badgeClass = 'badge-success';
-                                        elseif ($booking['status'] === 'cancelled') $badgeClass = 'badge-danger';
+                                        elseif ($booking['status'] === 'ready_for_delivery') $badgeClass = 'badge-primary';
                                         ?>
                                         <tr style="border-bottom: 1px solid var(--border);">
                                             <td class="p-4 font-bold">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
@@ -270,85 +282,172 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                 <div class="text-xs"><?php echo htmlspecialchars($booking['service_type']); ?></div>
                                             </td>
                                             <td class="p-4">
-                                                <div><?php echo $booking['preferred_date'] ? date('M d, Y', strtotime($booking['preferred_date'])) : 'N/A'; ?></div>
-                                                <div class="text-xs text-muted"><?php echo $booking['preferred_date'] ? date('h:i A', strtotime($booking['preferred_date'])) : ''; ?></div>
+                                                <div class="font-bold text-gray-700"><?php echo $booking['preferred_date'] ? date('M d, Y', strtotime($booking['preferred_date'])) : 'N/A'; ?></div>
                                             </td>
-                                            <td class="p-4"><span class="badge <?php echo $badgeClass; ?>"><?php echo ucfirst($booking['status']); ?></span></td>
-                                             <td class="p-4">
-                                                <form method="POST" class="flex gap-1">
-                                                    <input type="hidden" name="action" value="assign_mechanic">
-                                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                                    <select name="mechanic_id" class="form-control" style="padding: 0.25rem; font-size: 0.85rem;" onchange="this.form.submit()">
-                                                        <option value="">Assign Mechanic</option>
-                                                        <?php foreach ($mechanics as $mechanic): ?>
-                                                            <option value="<?php echo $mechanic['id']; ?>" <?php echo ($booking['mechanic_id'] == $mechanic['id']) ? 'selected' : ''; ?>>
-                                                                <?php echo htmlspecialchars($mechanic['name']); ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </form>
+                                            <td class="p-4">
+                                                <span class="badge <?php echo $badgeClass; ?> text-[10px]"><?php echo formatStatusLabel($booking['status']); ?></span>
                                             </td>
                                              <td class="p-4">
-                                                <form method="POST" class="flex flex-col gap-2">
-                                                    <input type="hidden" name="action" value="assign_driver">
-                                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                                <!-- Mechanic Assignment -->
+                                                <?php if ($booking['mechanic_id']): ?>
+                                                    <div class="flex items-center gap-1.5 text-gray-700">
+                                                        <i class="fa-solid fa-screwdriver-wrench text-[10px] text-primary"></i>
+                                                        <span class="text-xs font-bold"><?php echo htmlspecialchars($booking['mechanic_name']); ?></span>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <form method="POST" class="flex items-center gap-1">
+                                                        <input type="hidden" name="action" value="assign_mechanic">
+                                                        <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                                        <select name="mechanic_id" class="text-[10px] py-1 border-gray-200 rounded bg-gray-50 focus:bg-white" required>
+                                                            <option value="">Assign Mechanic</option>
+                                                            <?php foreach($mechanics as $m): ?>
+                                                                <option value="<?php echo $m['id']; ?>"><?php echo htmlspecialchars($m['name']); ?></option>
+                                                            <?php endforeach; ?>
+                                                        </select>
+                                                        <button type="submit" class="p-1 text-primary hover:text-primary-dark transition-colors">
+                                                            <i class="fa-solid fa-circle-check"></i>
+                                                        </button>
+                                                    </form>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="p-4">
+                                                <?php 
+                                                    $pdQuery = "SELECT id, type, driver_name, status FROM pickup_delivery WHERE booking_id = ?";
+                                                    $pdRes = executeQuery($pdQuery, [$booking['id']], 'i');
+                                                    $pdItems = [];
+                                                    if ($pdRes) {
+                                                        while ($pdRow = $pdRes->fetch_assoc()) {
+                                                            $pdItems[] = $pdRow;
+                                                        }
+                                                    }
                                                     
-                                                    <?php 
+                                                    $pickup = null; $delivery = null;
+                                                    foreach($pdItems as $item) {
+                                                        if($item['type'] == 'pickup') $pickup = $item;
+                                                        if($item['type'] == 'delivery') $delivery = $item;
+                                                    }
+                                                ?>
+                                                <div class="flex flex-col gap-2">
+                                                    <!-- Pickup Assignment -->
+                                                    <?php if($pickup): ?>
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-[9px] font-black uppercase text-muted w-12">Pickup:</span>
+                                                            <?php if ($pickup['driver_name']): ?>
+                                                                <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($pickup['driver_name']); ?></span>
+                                                            <?php else: ?>
+                                                                <form method="POST" class="flex items-center gap-1">
+                                                                    <input type="hidden" name="action" value="assign_driver">
+                                                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                                                    <input type="hidden" name="pd_id" value="<?php echo $pickup['id']; ?>">
+                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50" required>
+                                                                        <option value="">Assign Driver</option>
+                                                                        <?php foreach($drivers as $d): ?>
+                                                                            <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
+                                                                        <?php endforeach; ?>
+                                                                    </select>
+                                                                    <button type="submit" class="text-primary text-[10px]"><i class="fa-solid fa-check"></i></button>
+                                                                </form>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    <?php endif; ?>
+
+                                                    <!-- Delivery Assignment -->
+                                                    <?php if($delivery): ?>
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-[9px] font-black uppercase text-muted w-12">Delivery:</span>
+                                                            <?php if ($delivery['driver_name']): ?>
+                                                                <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($delivery['driver_name']); ?></span>
+                                                            <?php else: ?>
+                                                                <form method="POST" class="flex items-center gap-1">
+                                                                    <input type="hidden" name="action" value="assign_driver">
+                                                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                                                    <input type="hidden" name="pd_id" value="<?php echo $delivery['id']; ?>">
+                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50" required>
+                                                                        <option value="">Assign Driver</option>
+                                                                        <?php foreach($drivers as $d): ?>
+                                                                            <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
+                                                                        <?php endforeach; ?>
+                                                                    </select>
+                                                                    <button type="submit" class="text-primary text-[10px]"><i class="fa-solid fa-check"></i></button>
+                                                                </form>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                     </div>
+                </div>
+
+                <!-- Booking History -->
+                <div class="mb-4 pt-4 border-t border-gray-100">
+                    <h2 class="text-xl font-bold mb-2">Booking History</h2>
+                    <p class="text-sm text-muted">Completed, delivered, or cancelled services.</p>
+                </div>
+                <div class="card" style="padding: 0; overflow: hidden; opacity: 0.85;">
+                     <div style="overflow-x: auto;">
+                        <table class="w-full text-left" style="min-width: 800px;">
+                            <thead style="background: #F8FAFC; border-bottom: 1px solid var(--border);">
+                                <tr>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Booking ID</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Customer & Vehicle</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Service</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Date/Time</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Status</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Assignee Info</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase" colspan="2">Logistics Summary</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-sm">
+                                <?php if (empty($bookingHistory)): ?>
+                                    <tr>
+                                        <td colspan="8" class="p-4 text-center text-muted">No history found.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($bookingHistory as $booking): ?>
+                                        <?php
+                                        $badgeClass = 'badge-success';
+                                        if ($booking['status'] === 'cancelled') $badgeClass = 'badge-danger';
+                                        ?>
+                                        <tr style="border-bottom: 1px solid var(--border); background: #fcfcfc;">
+                                            <td class="p-4 font-bold text-muted">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
+                                            <td class="p-4">
+                                                <div class="font-bold"><?php echo htmlspecialchars($booking['customer_name'] ?? 'Unknown'); ?></div>
+                                                <div class="text-xs text-muted"><?php echo htmlspecialchars($booking['vehicle'] ?? 'N/A'); ?></div>
+                                            </td>
+                                            <td class="p-4">
+                                                <div class="text-xs"><?php echo htmlspecialchars($booking['service_type']); ?></div>
+                                            </td>
+                                            <td class="p-4">
+                                                <div><?php echo $booking['preferred_date'] ? date('M d, Y', strtotime($booking['preferred_date'])) : 'N/A'; ?></div>
+                                            </td>
+                                            <td class="p-4"><span class="badge <?php echo $badgeClass; ?>"><?php echo formatStatusLabel($booking['status']); ?></span></td>
+                                             <td class="p-4">
+                                                <div class="text-xs font-bold text-gray-700">
+                                                    <i class="fa-solid fa-screwdriver-wrench mr-1"></i> 
+                                                    <?php echo $booking['mechanic_name'] ? htmlspecialchars($booking['mechanic_name']) : 'Not Assigned'; ?>
+                                                </div>
+                                            </td>
+                                             <td class="p-4 text-xs" colspan="2">
+                                                 <div class="flex gap-4">
+                                                     <?php 
                                                         $pdQuery = "SELECT * FROM pickup_delivery WHERE booking_id = ?";
                                                         $pdResult = executeQuery($pdQuery, [$booking['id']], 'i');
-                                                        $pdTasks = [];
-                                                        if ($pdResult) {
-                                                            while($task = $pdResult->fetch_assoc()) $pdTasks[$task['type']] = $task;
-                                                        }
-                                                     ?>
-                                                     
-                                                     <?php if (empty($pdTasks)): ?>
-                                                        <div class="flex items-center gap-2 text-xs text-muted bg-gray-50 p-2 rounded-lg border border-dashed">
-                                                            <i class="fa-solid fa-house-user"></i>
-                                                            <span>Self Drop-off/Pickup</span>
-                                                        </div>
-                                                     <?php else: ?>
-                                                         <div class="flex flex-col gap-1.5 mb-2">
-                                                            <?php foreach (['pickup' => 'fa-arrow-down-long', 'delivery' => 'fa-arrow-up-long'] as $type => $icon): ?>
-                                                                <?php if (isset($pdTasks[$type])): ?>
-                                                                    <div class="p-2 rounded-lg <?php echo $type === 'pickup' ? 'bg-white border-gray-100' : 'bg-blue-50/50 border-blue-100'; ?> border shadow-sm">
-                                                                        <div class="flex items-center justify-between mb-1">
-                                                                            <span class="text-[9px] font-black uppercase <?php echo $type === 'pickup' ? 'text-gray-500' : 'text-primary'; ?>">
-                                                                                <i class="fa-solid <?php echo $icon; ?> mr-1"></i> <?php echo $type; ?>
-                                                                            </span>
-                                                                            <span class="badge <?php echo getStatusBadgeClass($pdTasks[$type]['status']); ?> text-[8px] transform scale-90"><?php echo str_replace('_', ' ', $pdTasks[$type]['status']); ?></span>
-                                                                        </div>
-                                                                        <div class="text-[10px] font-bold text-gray-800 line-clamp-1 border-t border-gray-50 pt-1" title="<?php echo htmlspecialchars($pdTasks[$type]['address']); ?>">
-                                                                            <?php echo htmlspecialchars($pdTasks[$type]['address']); ?>
-                                                                        </div>
-                                                                        <?php if(!empty($pdTasks[$type]['lat'])): ?>
-                                                                            <a href="https://www.google.com/maps/search/?api=1&query=<?php echo $pdTasks[$type]['lat'].','.$pdTasks[$type]['lng']; ?>" target="_blank" class="text-[8px] font-black text-primary uppercase mt-1 inline-block hover:underline">
-                                                                                <i class="fa-solid fa-location-dot"></i> GPS View
-                                                                            </a>
-                                                                        <?php endif; ?>
-                                                                    </div>
-                                                                <?php endif; ?>
-                                                            <?php endforeach; ?>
-                                                         </div>
-                                                         
-                                                         <div class="relative">
-                                                             <select name="driver_user_id" class="form-control text-[11px]" style="padding: 0.35rem; background: #fff; height: auto;" onchange="this.form.submit()">
-                                                                 <option value="">Assign New Driver</option>
-                                                                 <?php foreach ($drivers as $driver): ?>
-                                                                     <option value="<?php echo $driver['id']; ?>">
-                                                                         <?php echo htmlspecialchars($driver['name']); ?>
-                                                                     </option>
-                                                                 <?php endforeach; ?>
-                                                             </select>
-                                                             <?php if (isset($pdTasks['pickup']) && $pdTasks['pickup']['driver_name']): ?>
-                                                                <div class="text-[9px] text-muted mt-1 flex items-center gap-1">
-                                                                    <i class="fa-solid fa-user-check text-[8px] text-green-500"></i>
-                                                                    <span>Active: <?php echo htmlspecialchars($pdTasks['pickup']['driver_name']); ?></span>
+                                                        if ($pdResult): 
+                                                            while($task = $pdResult->fetch_assoc()): ?>
+                                                                <div class="flex flex-col gap-0.5">
+                                                                    <span class="text-[9px] font-black uppercase text-gray-400"><?php echo $task['type']; ?></span>
+                                                                    <span class="font-bold text-gray-600"><?php echo $task['driver_name'] ? htmlspecialchars($task['driver_name']) : 'N/A'; ?></span>
                                                                 </div>
-                                                             <?php endif; ?>
-                                                         </div>
-                                                     <?php endif; ?>
-                                                </form>
+                                                            <?php endwhile;
+                                                        endif;
+                                                     ?>
+                                                 </div>
                                              </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -358,9 +457,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
 
+                </div>
+
             </div>
         </main>
     </div>
+
+    <!-- Financial Details Modal -->
+    <div id="financialModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-100">
+                <div class="bg-white px-8 pt-8 pb-4">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-xl font-black text-gray-900" id="modal-title">Financial Audit</h3>
+                            <p class="text-xs text-muted" id="modal-booking-id">Booking #---</p>
+                        </div>
+                        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                            <i class="fa-solid fa-xmark text-xl"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="financialContent" class="space-y-4">
+                        <!-- Content will be loaded via AJAX -->
+                        <div class="flex flex-col items-center justify-center py-12">
+                            <i class="fa-solid fa-circle-notch fa-spin text-primary text-3xl mb-3"></i>
+                            <p class="text-xs font-bold text-muted uppercase tracking-widest">Calculating Charges...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-8 py-4 flex justify-between items-center">
+                    <p class="text-[10px] text-muted italic">All charges are synchronized in real-time with worker inputs.</p>
+                    <button type="button" onclick="closeModal()" class="btn btn-white text-xs font-black uppercase tracking-widest px-6 py-2 rounded-xl">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function viewFinancials(bookingId) {
+            const modal = document.getElementById('financialModal');
+            const content = document.getElementById('financialContent');
+            const idLabel = document.getElementById('modal-booking-id');
+            
+            modal.classList.remove('hidden');
+            idLabel.innerText = 'Refetching details for Booking ID: #' + bookingId;
+            
+            // Fetch financial data via AJAX
+            fetch(`ajax/get_financial_details.php?id=${bookingId}`)
+                .then(response => response.text())
+                .then(html => {
+                    content.innerHTML = html;
+                })
+                .catch(err => {
+                    content.innerHTML = `<div class="p-6 text-center text-red-500 text-xs">Error loading financial details.</div>`;
+                });
+        }
+
+        function closeModal() {
+            document.getElementById('financialModal').classList.add('hidden');
+            document.getElementById('financialContent').innerHTML = `
+                <div class="flex flex-col items-center justify-center py-12">
+                    <i class="fa-solid fa-circle-notch fa-spin text-primary text-3xl mb-3"></i>
+                    <p class="text-xs font-bold text-muted uppercase tracking-widest">Calculating Charges...</p>
+                </div>
+            `;
+        }
+    </script>
 </body>
 </html>
-

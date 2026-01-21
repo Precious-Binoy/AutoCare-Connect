@@ -1,5 +1,6 @@
 <?php 
 $page_title = 'History'; 
+$current_page = 'history.php';
 require_once 'includes/auth.php';
 requireLogin();
 
@@ -127,7 +128,9 @@ if ($result) {
                                         </td>
                                         <td class="p-4 text-right">
                                             <?php if ($role === 'customer'): ?>
-                                                <a href="track_service.php?id=<?php echo $b['id']; ?>" class="btn btn-sm btn-white border-none shadow-sm"><i class="fa-solid fa-eye"></i></a>
+                                                <a href="track_service.php?id=<?php echo $b['id']; ?>" class="btn btn-sm btn-primary text-white px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider hover:shadow-lg transition-all">
+                                                    View <i class="fa-solid fa-arrow-right ml-1"></i>
+                                                </a>
                                             <?php else: ?>
                                                 <span class="text-muted text-[10px]">Detail info N/A</span>
                                             <?php endif; ?>

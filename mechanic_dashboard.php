@@ -51,12 +51,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
     $booking_id = intval($_POST['booking_id']);
     $new_status = $_POST['status'];
-    $bill_amount = $_POST['bill_amount'] ?? null;
+    $mechanic_fee = floatval($_POST['mechanic_fee'] ?? 0);
     $service_notes = $_POST['service_notes'] ?? '';
     
+    // Repair Items (parts/products)
+    $item_names = $_POST['item_name'] ?? [];
+    $item_types = $_POST['item_type'] ?? [];
+    $item_prices = $_POST['item_price'] ?? [];
+    $item_quantities = $_POST['item_qty'] ?? [];
+
     $conn->begin_transaction();
     try {
         if ($new_status === 'completed') {
+            // Calculate parts total cost
+            $parts_total = 0;
+            foreach ($item_names as $i => $name) {
+                if (!empty($name)) {
+                    $price = floatval($item_prices[$i]);
+                    $qty = intval($item_quantities[$i]);
+                    $total = $price * $qty;
+                    $parts_total += $total;
+                    
+                    $insertPart = "INSERT INTO parts_used (booking_id, part_name, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?)";
+                    executeQuery($insertPart, [$booking_id, $name, $qty, $price, $total], 'isidd');
+                }
+            }
+
             // Check if booking has pickup/delivery
             $checkQuery = "SELECT has_pickup_delivery FROM bookings WHERE id = ?";
             $checkRes = executeQuery($checkQuery, [$booking_id], 'i');
@@ -64,18 +84,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             $hasPickupDelivery = $bookingData['has_pickup_delivery'] ?? false;
             
             if ($hasPickupDelivery) {
-                // Has delivery - set to ready_for_delivery
                 $finalStatus = 'ready_for_delivery';
-                $finalMsg = "Repair Completed. Work Done: " . $service_notes . ". Total Bill: ₹" . number_format($bill_amount, 2) . ". Ready for delivery.";
+                $finalMsg = "Repair Completed. Mechanic Fee: ₹" . number_format($mechanic_fee, 2) . ". Parts Total: ₹" . number_format($parts_total, 2) . ". Ready for delivery.";
+                
+                // NEW: Ensure the delivery task is scheduled so drivers can see it
+                $updateDelivery = "UPDATE pickup_delivery SET status = 'scheduled' WHERE booking_id = ? AND type = 'delivery' AND status = 'pending'";
+                executeQuery($updateDelivery, [$booking_id], 'i');
             } else {
-                // Self-pickup - set to completed
                 $finalStatus = 'completed';
-                $finalMsg = "Repair Completed. Work Done: " . $service_notes . ". Total Bill: ₹" . number_format($bill_amount, 2) . ". Ready for customer pickup.";
+                $finalMsg = "Repair Completed. Mechanic Fee: ₹" . number_format($mechanic_fee, 2) . ". Parts Total: ₹" . number_format($parts_total, 2) . ". Ready for customer pickup.";
             }
             
-            // Update booking status, bill amount and service notes
-            $updateBookingQuery = "UPDATE bookings SET status = ?, bill_amount = ?, service_notes = ?, completion_date = NOW(), progress_percentage = 100, is_billed = TRUE WHERE id = ? AND mechanic_id = ?";
-            executeQuery($updateBookingQuery, [$finalStatus, $bill_amount, $service_notes, $booking_id, $mechanic['id']], 'sdsii');
+            // Update booking status, mechanic fee, and add to final_cost
+            $updateBookingQuery = "UPDATE bookings SET status = ?, mechanic_fee = ?, service_notes = ?, completion_date = NOW(), progress_percentage = 100, is_billed = TRUE, final_cost = IFNULL(final_cost, 0) + ? + ? WHERE id = ? AND mechanic_id = ?";
+            executeQuery($updateBookingQuery, [$finalStatus, $mechanic_fee, $service_notes, $mechanic_fee, $parts_total, $booking_id, $mechanic['id']], 'sdsddii');
 
             // Insert service update
             $insertUpdateQuery = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, ?, ?, ?, ?)";
@@ -101,55 +123,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
     }
 }
 
+// Check if mechanic already has an active task
+$hasActiveJobQuery = "SELECT COUNT(*) as active_count FROM bookings WHERE mechanic_id = ? AND status IN ('confirmed', 'in_progress')";
+$hasActiveJobRes = executeQuery($hasActiveJobQuery, [$mechanic['id']], 'i');
+$hasActiveJob = $hasActiveJobRes->fetch_assoc()['active_count'] > 0;
+
 // Handle Job Acceptance (Self-Assignment)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_job'])) {
-    $booking_id = intval($_POST['booking_id']);
-    
-    $conn->begin_transaction();
-    try {
-        // Assign this mechanic to the booking
-        $assignQuery = "UPDATE bookings SET mechanic_id = ?, status = 'confirmed' WHERE id = ? AND mechanic_id IS NULL";
-        $result = executeQuery($assignQuery, [$mechanic['id'], $booking_id], 'ii');
+    if ($hasActiveJob) {
+        $error_msg = "You already have an active job. Complete it before accepting another.";
+    } else {
+        $booking_id = intval($_POST['booking_id']);
         
-        if ($result) {
-            // Set mechanic as unavailable
-            executeQuery("UPDATE mechanics SET is_available = FALSE WHERE id = ?", [$mechanic['id']], 'i');
+        $conn->begin_transaction();
+        try {
+            // Assign this mechanic to the booking
+            $assignQuery = "UPDATE bookings SET mechanic_id = ?, status = 'confirmed' WHERE id = ? AND mechanic_id IS NULL";
+            $result = executeQuery($assignQuery, [$mechanic['id'], $booking_id], 'ii');
             
-            // Add service update
-            $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'confirmed', 'Mechanic assigned and confirmed.', 10, ?)";
-            executeQuery($insertUpdate, [$booking_id, $user_id], 'ii');
-            
-            $conn->commit();
-            $success_msg = "Job accepted successfully! You are now assigned to this booking.";
-        } else {
+            if ($result) {
+                // Set mechanic as unavailable
+                executeQuery("UPDATE mechanics SET is_available = FALSE WHERE id = ?", [$mechanic['id']], 'i');
+                
+                // Add service update
+                $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'confirmed', 'Mechanic assigned and confirmed.', 10, ?)";
+                executeQuery($insertUpdate, [$booking_id, $user_id], 'ii');
+                
+                $conn->commit();
+                $success_msg = "Job accepted successfully! You are now assigned to this booking.";
+            } else {
+                $conn->rollback();
+                $error_msg = "This job has already been assigned to another mechanic.";
+            }
+        } catch (Exception $e) {
             $conn->rollback();
-            $error_msg = "This job has already been assigned to another mechanic.";
+            $error_msg = "Error accepting job: " . $e->getMessage();
         }
-    } catch (Exception $e) {
-        $conn->rollback();
-        $error_msg = "Error accepting job: " . $e->getMessage();
     }
 }
 
 // Fetch Available Jobs (Unassigned)
+// Only show if:
+// 1. Drop-off (has_pickup_delivery = 0) and status 'pending'
+// 2. Pickup (has_pickup_delivery = 1) and status 'confirmed' (driver finished pickup)
 $availableJobsQuery = "SELECT b.*, v.make, v.model, v.year, v.license_plate, v.type, u.name as customer_name, u.phone as customer_phone
                        FROM bookings b 
                        JOIN vehicles v ON b.vehicle_id = v.id 
                        JOIN users u ON b.user_id = u.id 
-                       WHERE b.mechanic_id IS NULL AND b.status = 'pending'
+                       WHERE b.mechanic_id IS NULL 
+                       AND (
+                           (b.has_pickup_delivery = 0 AND b.status = 'pending')
+                           OR
+                           (b.has_pickup_delivery = 1 AND b.status = 'confirmed')
+                       )
                        ORDER BY b.created_at DESC";
 $availableJobsResult = executeQuery($availableJobsQuery, [], '');
-$availableJobs = $availableJobsResult->fetch_all(MYSQLI_ASSOC);
+$availableJobs = [];
+if ($availableJobsResult) {
+    while ($row = $availableJobsResult->fetch_assoc()) {
+        $availableJobs[] = $row;
+    }
+}
 
 // Fetch Active Jobs
 $activeJobsQuery = "SELECT b.*, v.make, v.model, v.year, v.license_plate, u.name as customer_name 
                     FROM bookings b 
                     JOIN vehicles v ON b.vehicle_id = v.id 
                     JOIN users u ON b.user_id = u.id 
-                    WHERE b.mechanic_id = ? AND b.status IN ('confirmed', 'in_progress') 
+                    WHERE b.mechanic_id = ? AND b.status IN ('pending', 'confirmed', 'in_progress') 
                     ORDER BY b.preferred_date ASC";
 $activeJobsResult = executeQuery($activeJobsQuery, [$mechanic['id']], 'i');
-$activeJobs = $activeJobsResult->fetch_all(MYSQLI_ASSOC);
+$activeJobs = [];
+if ($activeJobsResult) {
+    while ($row = $activeJobsResult->fetch_assoc()) {
+        $activeJobs[] = $row;
+    }
+}
 
 // Fetch History
 $historyQuery = "SELECT b.*, v.make, v.model, v.year, u.name as customer_name 
@@ -159,7 +208,12 @@ $historyQuery = "SELECT b.*, v.make, v.model, v.year, u.name as customer_name
                  WHERE b.mechanic_id = ? AND b.status IN ('completed', 'delivered', 'ready_for_delivery') 
                  ORDER BY b.updated_at DESC LIMIT 20";
 $historyResult = executeQuery($historyQuery, [$mechanic['id']], 'i');
-$history = $historyResult->fetch_all(MYSQLI_ASSOC);
+$history = [];
+if ($historyResult) {
+    while ($row = $historyResult->fetch_assoc()) {
+        $history[] = $row;
+    }
+}
 
 $page_title = 'Mechanic Dashboard';
 ?>
@@ -216,58 +270,73 @@ $page_title = 'Mechanic Dashboard';
                     <?php if ($subtab == 'active'): ?>
                     <!-- Active Jobs -->
 
-                    <div class="grid grid-cols-1 gap-6">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                         <?php if (empty($activeJobs)): ?>
-                            <div class="card p-16 text-center text-muted border-dashed">
-                                <i class="fa-solid fa-screwdriver-wrench text-7xl mb-6 opacity-10"></i>
+                            <div class="col-span-1 xl:col-span-2 card p-16 text-center text-muted border-dashed bg-gray-50/50">
+                                <div class="w-24 h-24 bg-white shadow-sm rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <i class="fa-solid fa-screwdriver-wrench text-5xl text-gray-300"></i>
+                                </div>
                                 <h3 class="font-bold text-2xl text-gray-400">No Assignments Yet</h3>
                                 <p class="max-w-sm mx-auto mt-2">New job requests will appear here once they are confirmed by the admin.</p>
                             </div>
                         <?php else: ?>
                             <?php foreach ($activeJobs as $job): ?>
-                                <div class="card overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                                    <div class="flex flex-col md:flex-row">
+                                <div class="card overflow-hidden hover:shadow-2xl transition-all duration-300 group relative border-0 shadow-lg">
+                                    <div class="absolute top-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                                    <div class="flex flex-col h-full">
                                         <div class="p-8 flex-1">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <span class="badge <?php echo getStatusBadgeClass($job['status']); ?> px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                                                    <?php echo ucfirst(str_replace('_', ' ', $job['status'])); ?>
-                                                </span>
-                                                <span class="text-xs text-muted font-bold font-mono">ID: #<?php echo $job['booking_number']; ?></span>
+                                            <div class="flex justify-between items-start mb-6">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="badge <?php echo getStatusBadgeClass($job['status']); ?> px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm">
+                                                        <i class="fa-solid fa-circle text-[6px] mr-1.5"></i> <?php echo ucfirst(str_replace('_', ' ', $job['status'])); ?>
+                                                    </span>
+                                                    <?php if ($job['status'] === 'in_progress'): ?>
+                                                        <span class="animate-pulse w-2 h-2 bg-green-500 rounded-full"></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <span class="font-mono text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">#<?php echo $job['booking_number']; ?></span>
                                             </div>
                                             
-                                            <h3 class="text-2xl font-black text-gray-900 mb-2">
+                                            <h3 class="text-2xl md:text-3xl font-black text-gray-900 mb-2 leading-tight">
                                                 <?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?>
                                             </h3>
                                             
-                                            <div class="flex flex-wrap gap-4 text-sm text-muted mb-6">
-                                                <div class="flex items-center gap-2"><i class="fa-solid fa-user text-primary/60"></i> <?php echo htmlspecialchars($job['customer_name']); ?></div>
-                                                <div class="flex items-center gap-2 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100"><i class="fa-solid fa-hashtag text-primary/60"></i> <?php echo htmlspecialchars($job['license_plate']); ?></div>
+                                            <div class="flex flex-wrap gap-3 mb-6">
+                                                <div class="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                                                    <i class="fa-solid fa-user text-primary/70"></i> <?php echo htmlspecialchars($job['customer_name']); ?>
+                                                </div>
+                                                <div class="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100 font-mono">
+                                                    <i class="fa-solid fa-hashtag text-primary/70"></i> <?php echo htmlspecialchars($job['license_plate']); ?>
+                                                </div>
                                             </div>
 
-                                            <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex gap-4">
-                                                <div class="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-primary">
-                                                    <i class="fa-solid fa-clipboard-check"></i>
+                                            <div class="bg-blue-50/50 p-5 rounded-2xl border border-blue-50 flex gap-4 transition-colors group-hover:bg-blue-50">
+                                                <div class="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-blue-500 shrink-0">
+                                                    <i class="fa-solid fa-clipboard-list"></i>
                                                 </div>
                                                 <div>
-                                                    <div class="text-[10px] uppercase font-bold text-muted mb-1">Service Type</div>
-                                                    <div class="font-bold text-gray-800"><?php echo htmlspecialchars($job['service_type']); ?></div>
-                                                    <div class="text-sm text-gray-600 mt-1 italic"><?php echo htmlspecialchars($job['notes'] ?? 'No special notes.'); ?></div>
+                                                    <div class="text-[10px] uppercase font-bold text-blue-400 mb-1 tracking-wider">Service Requirements</div>
+                                                    <div class="font-bold text-gray-900 text-sm md:text-base"><?php echo htmlspecialchars($job['service_type']); ?></div>
+                                                    <div class="text-xs text-gray-500 mt-1 italic leading-relaxed">
+                                                        <i class="fa-solid fa-quote-left mr-1 opacity-50"></i>
+                                                        <?php echo htmlspecialchars($job['notes'] ?? 'No special instructions provided.'); ?>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                         
-                                        <div class="p-8 bg-gray-50/50 border-l border-gray-100 flex flex-col justify-center gap-3 w-full md:w-64">
-                                            <?php if ($job['status'] === 'confirmed'): ?>
-                                                <form method="POST">
-                                                    <input type="hidden" name="booking_id" value="<?php echo $job['id']; ?>">
-                                                    <input type="hidden" name="status" value="in_progress">
-                                                    <button type="submit" name="update_status" class="btn btn-primary w-full py-4 font-bold shadow-lg shadow-blue-100">
-                                                        <i class="fa-solid fa-play mr-2"></i> Start Work
-                                                    </button>
-                                                </form>
-                                            <?php elseif ($job['status'] === 'in_progress'): ?>
-                                                <button class="btn btn-success w-full py-4 font-bold shadow-lg shadow-green-100" onclick="openCompleteModal(<?php echo $job['id']; ?>)">
-                                                    <i class="fa-solid fa-check-double mr-2"></i> Complete & Bill
+                                        <div class="p-6 bg-gray-50 border-t border-gray-100">
+                                            <?php if ($job['status'] === 'confirmed' || $job['status'] === 'pending'): ?>
+                                                 <form method="POST">
+                                                     <input type="hidden" name="booking_id" value="<?php echo $job['id']; ?>">
+                                                     <input type="hidden" name="status" value="in_progress">
+                                                     <button type="submit" name="update_status" class="btn btn-primary w-full py-3.5 font-bold shadow-lg shadow-blue-500/20 rounded-xl hover:scale-[1.02] transition-transform">
+                                                         <i class="fa-solid fa-play mr-2"></i> Start Diagnosis / Repair
+                                                     </button>
+                                                 </form>
+                                             <?php elseif ($job['status'] === 'in_progress'): ?>
+                                                <button class="btn btn-success w-full py-3.5 font-bold shadow-lg shadow-green-500/20 rounded-xl hover:scale-[1.02] transition-transform" onclick="openCompleteModal(<?php echo $job['id']; ?>)">
+                                                    <i class="fa-solid fa-check-to-slot mr-2"></i> Finalize & Generate Bill
                                                 </button>
                                             <?php endif; ?>
                                         </div>
@@ -279,54 +348,64 @@ $page_title = 'Mechanic Dashboard';
                     
                     <?php elseif ($subtab == 'available'): ?>
                     <!-- Available Jobs -->
-                    <div class="grid grid-cols-1 gap-6">
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         <?php if (empty($availableJobs)): ?>
-                            <div class="card p-16 text-center text-muted border-dashed">
-                                <i class="fa-solid fa-clipboard-list text-7xl mb-6 opacity-10"></i>
+                            <div class="col-span-1 xl:col-span-2 card p-16 text-center text-muted border-dashed">
+                                <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <i class="fa-solid fa-clipboard-list text-4xl opacity-20"></i>
+                                </div>
                                 <h3 class="font-bold text-2xl text-gray-400">No Jobs Available</h3>
                                 <p class="max-w-sm mx-auto mt-2">There are currently no pending jobs available for assignment.</p>
                             </div>
                         <?php else: ?>
                             <?php foreach ($availableJobs as $job): ?>
-                                <div class="card overflow-hidden hover:shadow-xl transition-shadow duration-300">
-                                    <div class="flex flex-col md:flex-row">
-                                        <div class="p-8 flex-1">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <span class="badge badge-success px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                                                    New Request
-                                                </span>
-                                                <span class="text-xs text-muted font-bold font-mono">Booked: <?php echo date('M d, H:i', strtotime($job['created_at'])); ?></span>
-                                            </div>
-                                            
-                                            <h3 class="text-2xl font-black text-gray-900 mb-2">
-                                                <?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?>
-                                            </h3>
-                                            
-                                            <div class="flex flex-wrap gap-4 text-sm text-muted mb-6">
-                                                <div class="flex items-center gap-2"><i class="fa-solid fa-user text-primary/60"></i> <?php echo htmlspecialchars($job['customer_name']); ?></div>
-                                                <div class="flex items-center gap-2 font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100"><i class="fa-solid fa-hashtag text-primary/60"></i> <?php echo htmlspecialchars($job['license_plate']); ?></div>
-                                            </div>
-
-                                            <div class="bg-gray-50 p-5 rounded-2xl border border-gray-100 flex gap-4">
-                                                <div class="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-primary">
-                                                    <i class="fa-solid fa-clipboard-check"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="text-[10px] uppercase font-bold text-muted mb-1">Service Type</div>
-                                                    <div class="font-bold text-gray-800"><?php echo htmlspecialchars($job['service_type']); ?></div>
-                                                    <div class="text-sm text-gray-600 mt-1 italic"><?php echo htmlspecialchars($job['notes'] ?? 'No special notes.'); ?></div>
-                                                </div>
+                                <div class="card overflow-hidden hover:shadow-2xl transition-all duration-300 border border-gray-100 group">
+                                    <div class="p-8 flex flex-col h-full">
+                                        <div class="flex justify-between items-start mb-6">
+                                            <span class="badge badge-success px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-2">
+                                                <span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> New Request
+                                            </span>
+                                            <div class="text-right">
+                                                <span class="text-[10px] text-muted font-bold block">Booked on</span>
+                                                <span class="text-xs font-bold text-gray-700"><?php echo date('M d, H:i', strtotime($job['created_at'])); ?></span>
                                             </div>
                                         </div>
                                         
-                                        <div class="p-8 bg-gray-50/50 border-l border-gray-100 flex flex-col justify-center gap-3 w-full md:w-64">
-                                            <form method="POST" onsubmit="return confirm('Are you sure you want to accept this job? You will be marked as unavailable for other tasks.');">
-                                                <input type="hidden" name="booking_id" value="<?php echo $job['id']; ?>">
-                                                <button type="submit" name="accept_job" class="btn btn-primary w-full py-4 font-bold shadow-lg shadow-blue-100">
-                                                    <i class="fa-solid fa-hand-point-up mr-2"></i> Accept Job
-                                                </button>
-                                            </form>
+                                        <div class="flex items-center gap-4 mb-6">
+                                            <div class="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-xl">
+                                                <i class="fa-solid fa-car"></i>
+                                            </div>
+                                            <div>
+                                                <h3 class="text-xl font-black text-gray-900 leading-tight">
+                                                    <?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?>
+                                                </h3>
+                                                <div class="flex gap-2 mt-1">
+                                                    <span class="text-[10px] font-bold text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
+                                                        <?php echo htmlspecialchars($job['license_plate']); ?>
+                                                    </span>
+                                                    <span class="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded border border-blue-50">
+                                                        <?php echo htmlspecialchars($job['type']); ?>
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6 flex-1">
+                                            <label class="text-[10px] uppercase font-bold text-muted mb-2 block tracking-widest">Initial Report</label>
+                                            <p class="text-sm font-bold text-gray-800 line-clamp-2">
+                                                <?php echo htmlspecialchars($job['service_type']); ?>
+                                            </p>
+                                            <?php if(!empty($job['notes'])): ?>
+                                                <p class="text-xs text-gray-500 mt-1 line-clamp-1 italic">"<?php echo htmlspecialchars($job['notes']); ?>"</p>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <form method="POST" onsubmit="return confirm('Are you sure you want to accept this job? You will be marked as unavailable for other tasks.');">
+                                            <input type="hidden" name="booking_id" value="<?php echo $job['id']; ?>">
+                                            <button type="submit" name="accept_job" class="btn btn-primary w-full py-3.5 font-bold shadow-lg shadow-blue-500/20 rounded-xl hover:scale-[1.02] transition-transform">
+                                                <i class="fa-solid fa-hand-point-up mr-2"></i> Accept Assignment
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -377,7 +456,7 @@ $page_title = 'Mechanic Dashboard';
                                                 <td class="p-5 font-black text-gray-900">₹<?php echo number_format($h['bill_amount'] ?? 0, 2); ?></td>
                                                 <td class="p-5 text-right">
                                                     <span class="badge <?php echo getStatusBadgeClass($h['status']); ?> px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                                        <?php echo ucfirst($h['status']); ?>
+                                                        <?php echo formatStatusLabel($h['status']); ?>
                                                     </span>
                                                 </td>
                                             </tr>
@@ -475,19 +554,97 @@ $page_title = 'Mechanic Dashboard';
                     <input type="hidden" name="booking_id" id="modal_booking_id">
                     <input type="hidden" name="status" value="completed">
                     
-                    <div class="form-group mb-6">
-                        <label class="text-xs font-black uppercase text-gray-500 mb-2 block ml-1">Final Service Amount (₹) *</label>
-                        <div class="relative">
-                            <span class="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-gray-400">₹</span>
-                            <input type="number" name="bill_amount" class="form-control h-16 pl-10 pr-5 text-xl font-black bg-gray-50 border-gray-200 focus:bg-white transition-all rounded-2xl" 
-                                   required placeholder="0.00" min="1" step="0.01">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div class="form-group">
+                            <label class="text-xs font-black uppercase text-gray-400 mb-2 block ml-1">Labor / Mechanic Fee (₹) *</label>
+                            <div class="relative">
+                                <span class="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-gray-400">₹</span>
+                                <input type="number" name="mechanic_fee" oninput="calculateTotal()" class="form-control h-14 pl-10 pr-5 text-lg font-black bg-gray-50 border-gray-200 focus:bg-white transition-all rounded-2xl" 
+                                       required placeholder="0.00" min="0" step="0.01">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-center bg-primary/5 rounded-2xl border border-primary/10 p-4">
+                            <div class="text-center">
+                                <p class="text-[9px] font-black uppercase text-primary tracking-widest mb-1">Live Bill Preview</p>
+                                <p class="text-2xl font-black text-primary" id="pricePreview">₹0.00</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-10">
+                        <!-- Invoice Header -->
+                        <div class="flex justify-between items-end mb-6 border-b border-gray-200 pb-4">
+                            <div>
+                                <h3 class="text-sm font-black uppercase tracking-widest text-gray-900">Billable Items</h3>
+                                <p class="text-xs text-gray-500 mt-1">Add parts and services used in this repair.</p>
+                            </div>
+                            <button type="button" onclick="addRepairItem()" class="btn btn-sm btn-outline rounded-lg text-xs border-dashed hover:border-solid">
+                                <i class="fa-solid fa-plus mr-1"></i> Add Item
+                            </button>
+                        </div>
+                        
+                        <!-- Invoice Table Header -->
+                        <div class="hidden md:grid grid-cols-12 gap-4 px-2 mb-3">
+                            <div class="col-span-1 text-[10px] font-black uppercase text-gray-400 tracking-wider">#</div>
+                            <div class="col-span-5 text-[10px] font-black uppercase text-gray-400 tracking-wider">Description</div>
+                            <div class="col-span-2 text-[10px] font-black uppercase text-gray-400 tracking-wider text-center">Qty</div>
+                            <div class="col-span-2 text-[10px] font-black uppercase text-gray-400 tracking-wider text-right">Price</div>
+                            <div class="col-span-2 text-[10px] font-black uppercase text-gray-400 tracking-wider text-right">Amount</div>
+                        </div>
+
+                        <div id="repairItemsContainer" class="flex flex-col gap-0 border-t border-gray-100">
+                            <!-- Items will be added here -->
+                            <div class="repair-item-row grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center py-4 border-b border-gray-100 group hover:bg-gray-50/50 transition-colors px-2 relative">
+                                <!-- Item Number -->
+                                <div class="col-span-1 hidden md:block">
+                                    <span class="text-sm font-bold text-gray-300 item-index">01</span>
+                                </div>
+
+                                <!-- Description -->
+                                <div class="col-span-5">
+                                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Description</label>
+                                    <input type="text" name="item_name[]" placeholder="Item Name / Description" 
+                                           class="w-full bg-transparent border-0 border-b border-transparent focus:border-primary focus:ring-0 text-sm font-bold text-gray-900 placeholder-gray-300 p-0 transition-all" required>
+                                </div>
+
+                                <!-- Qty -->
+                                <div class="col-span-2">
+                                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Qty</label>
+                                    <input type="number" name="item_qty[]" value="1" min="1" oninput="calculateTotal()" 
+                                           class="w-full bg-transparent border-0 border-b border-transparent focus:border-primary focus:ring-0 text-sm font-bold text-gray-900 text-left md:text-center p-0 transition-all" required>
+                                </div>
+
+                                <!-- Price -->
+                                <div class="col-span-2">
+                                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Price</label>
+                                    <div class="flex items-center md:justify-end gap-1">
+                                        <span class="text-gray-400 text-xs font-medium">₹</span>
+                                        <input type="number" name="item_price[]" placeholder="0.00" step="0.01" oninput="calculateTotal()" 
+                                               class="w-full md:w-24 bg-transparent border-0 border-b border-transparent focus:border-primary focus:ring-0 text-sm font-bold text-gray-900 text-left md:text-right p-0 transition-all" required>
+                                    </div>
+                                </div>
+
+                                <!-- Amount (Calculated) -->
+                                <div class="col-span-2 relative">
+                                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Amount</label>
+                                    <div class="text-right">
+                                        <span class="text-sm font-black text-gray-900 item-amount">₹0.00</span>
+                                    </div>
+                                    
+                                    <!-- Delete Action (Absolute positioned on desktop) -->
+                                    <button type="button" onclick="this.closest('.repair-item-row').remove(); calculateTotal(); reindexItems();" 
+                                            class="absolute -right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-100 md:opacity-0 group-hover:opacity-100">
+                                        <i class="fa-solid fa-xmark text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="form-group mb-10">
-                        <label class="text-xs font-black uppercase text-gray-500 mb-2 block ml-1">Comprehensive Repair Notes</label>
+                        <label class="text-xs font-black uppercase text-gray-400 mb-2 block ml-1">Comprehensive Repair Notes</label>
                         <textarea name="service_notes" class="form-control p-5 text-base font-medium bg-gray-50 border-gray-200 focus:bg-white transition-all rounded-2xl" 
-                                  rows="4" placeholder="Mention all parts changed, specific adjustments made, and future recommendations..."></textarea>
+                                  rows="3" placeholder="Additional details about the repair..."></textarea>
                     </div>
 
                     <div class="flex flex-col sm:flex-row gap-4">
@@ -514,6 +671,102 @@ $page_title = 'Mechanic Dashboard';
         function openCompleteModal(id) {
             document.getElementById('modal_booking_id').value = id;
             document.getElementById('completeModal').style.display = 'flex';
+            calculateTotal();
+        }
+
+        function addRepairItem() {
+            const container = document.getElementById('repairItemsContainer');
+            const row = document.createElement('div');
+            row.className = 'repair-item-row grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center py-4 border-b border-gray-100 group hover:bg-gray-50/50 transition-colors px-2 relative animate-fade-in';
+            row.innerHTML = `
+                <!-- Item Number -->
+                <div class="col-span-1 hidden md:block">
+                    <span class="text-sm font-bold text-gray-300 item-index">00</span>
+                </div>
+
+                <!-- Description -->
+                <div class="col-span-5">
+                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Description</label>
+                    <input type="text" name="item_name[]" placeholder="Item Name / Description" 
+                           class="w-full bg-transparent border-0 border-b border-transparent focus:border-primary focus:ring-0 text-sm font-bold text-gray-900 placeholder-gray-300 p-0 transition-all" required>
+                </div>
+
+                <!-- Qty -->
+                <div class="col-span-2">
+                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Qty</label>
+                    <input type="number" name="item_qty[]" value="1" min="1" oninput="calculateTotal()" 
+                           class="w-full bg-transparent border-0 border-b border-transparent focus:border-primary focus:ring-0 text-sm font-bold text-gray-900 text-left md:text-center p-0 transition-all" required>
+                </div>
+
+                <!-- Price -->
+                <div class="col-span-2">
+                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Price</label>
+                    <div class="flex items-center md:justify-end gap-1">
+                        <span class="text-gray-400 text-xs font-medium">₹</span>
+                        <input type="number" name="item_price[]" placeholder="0.00" step="0.01" oninput="calculateTotal()" 
+                               class="w-full md:w-24 bg-transparent border-0 border-b border-transparent focus:border-primary focus:ring-0 text-sm font-bold text-gray-900 text-left md:text-right p-0 transition-all" required>
+                    </div>
+                </div>
+
+                <!-- Amount (Calculated) -->
+                <div class="col-span-2 relative">
+                    <label class="md:hidden text-[10px] font-bold text-gray-400 uppercase mb-1 block">Amount</label>
+                    <div class="text-right">
+                        <span class="text-sm font-black text-gray-900 item-amount">₹0.00</span>
+                    </div>
+                    
+                    <!-- Delete Action -->
+                    <button type="button" onclick="this.closest('.repair-item-row').remove(); calculateTotal(); reindexItems();" 
+                            class="absolute -right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all opacity-100 md:opacity-0 group-hover:opacity-100">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+            `;
+            container.appendChild(row);
+            reindexItems();
+        }
+
+        function reindexItems() {
+            const rows = document.querySelectorAll('.repair-item-row');
+            rows.forEach((row, index) => {
+                const indexDisplay = row.querySelector('.item-index');
+                if (indexDisplay) {
+                    indexDisplay.innerText = (index + 1).toString().padStart(2, '0');
+                }
+            });
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            const laborInput = document.querySelector('input[name="mechanic_fee"]');
+            const labor = parseFloat(laborInput.value) || 0;
+            
+            // Calculate item rows
+            const rows = document.querySelectorAll('.repair-item-row');
+            let partsTotal = 0;
+            
+            rows.forEach(row => {
+                const qtyInput = row.querySelector('input[name="item_qty[]"]');
+                const priceInput = row.querySelector('input[name="item_price[]"]');
+                const amountDisplay = row.querySelector('.item-amount');
+                
+                const qty = parseFloat(qtyInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const amount = qty * price;
+                
+                if (amountDisplay) {
+                    amountDisplay.innerText = '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+                
+                partsTotal += amount;
+            });
+            
+            total = labor + partsTotal;
+            
+            const totalDisplay = document.getElementById('pricePreview');
+            if (totalDisplay) {
+                totalDisplay.innerText = '₹' + total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
         }
 
         // Close modal if clicked outside

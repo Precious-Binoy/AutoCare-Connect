@@ -71,13 +71,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 // 2. Create/Update Specific Role Record
                 if ($request['role_requested'] === 'driver') {
-                    $stmt = $conn->prepare("INSERT INTO drivers (user_id, license_number, vehicle_number, is_available) VALUES (?, ?, ?, TRUE) ON DUPLICATE KEY UPDATE license_number = VALUES(license_number)");
-                    $license = "See document"; 
+                    // Drivers table has: user_id, license_number, vehicle_number, vehicle_type, vehicle_info, is_available
+                    $stmt = $conn->prepare("INSERT INTO drivers (user_id, license_number, vehicle_number, vehicle_type, is_available) 
+                                           VALUES (?, ?, ?, ?, TRUE) 
+                                           ON DUPLICATE KEY UPDATE license_number = VALUES(license_number), vehicle_number = VALUES(vehicle_number)");
+                    $license = "Verified"; 
                     $vehicle = "Not Assigned";
-                    $stmt->bind_param("iss", $user_id, $license, $vehicle);
+                    $v_type = "Not Specified";
+                    $stmt->bind_param("isss", $user_id, $license, $vehicle, $v_type);
                     $stmt->execute();
                 } elseif ($request['role_requested'] === 'mechanic') {
-                    $stmt = $conn->prepare("INSERT INTO mechanics (user_id, years_experience, certification, status) VALUES (?, ?, ?, 'available') ON DUPLICATE KEY UPDATE years_experience = VALUES(years_experience), certification = VALUES(certification), status='available'");
+                    // Mechanics table has: user_id, years_experience, certification, status, is_available
+                    $stmt = $conn->prepare("INSERT INTO mechanics (user_id, years_experience, certification, status, is_available) 
+                                           VALUES (?, ?, ?, 'available', TRUE) 
+                                           ON DUPLICATE KEY UPDATE years_experience = VALUES(years_experience), certification = VALUES(certification), status='available'");
                     $cert = "Verified ID: " . basename($request['id_proof_path']);
                     $stmt->bind_param("iis", $user_id, $request['experience_years'], $cert);
                     $stmt->execute();

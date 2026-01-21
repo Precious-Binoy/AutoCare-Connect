@@ -248,67 +248,79 @@ if ($pd_id) {
                         <!-- Right Column: Preferences & Map (8 Cols) -->
                         <div class="lg:col-span-8 flex flex-col gap-8">
                             
-                            <!-- Detailed Preferences Form -->
+                            <!-- Premium Logistics Preferences Redesign -->
                             <div class="glass-card p-10 border-none shadow-2xl bg-white relative overflow-hidden">
-                                <div class="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-full -z-0"></div>
+                                <div class="absolute top-0 right-0 w-64 h-64 bg-blue-50/30 rounded-full -mr-32 -mt-32 -z-10"></div>
+                                <div class="absolute bottom-0 left-0 w-32 h-32 bg-slate-50 rounded-full -ml-16 -mb-16 -z-10"></div>
                                 
                                 <div class="relative z-10">
-                                    <div class="flex items-center gap-4 mb-10">
-                                        <div class="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl shadow-blue-200">
-                                            <i class="fa-solid fa-sliders"></i>
+                                    <div class="flex items-center justify-between mb-10">
+                                        <div class="flex items-center gap-5">
+                                            <div class="w-16 h-16 bg-gradient-to-br from-primary to-blue-600 rounded-3xl flex items-center justify-center text-white text-2xl shadow-xl shadow-blue-200">
+                                                <i class="fa-solid fa-map-location-dot"></i>
+                                            </div>
+                                            <div>
+                                                <h3 class="text-2xl font-black text-gray-900 tracking-tight">Logistics Preferences</h3>
+                                                <p class="text-xs font-bold text-muted uppercase tracking-widest mt-1">Handoff & Contact Coordination</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 class="text-2xl font-black text-gray-900">Logistics Preferences</h3>
-                                            <p class="text-sm text-muted">Update your location and timing for a seamless handoff.</p>
+                                        <div class="hidden md:block text-right">
+                                            <div class="text-[10px] font-black uppercase text-primary tracking-widest mb-1">Service Type</div>
+                                            <div class="badge badge-primary px-4 py-1.5 rounded-xl uppercase text-[10px] font-black">
+                                                <?php echo htmlspecialchars($request['type']); ?> Valet
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <form method="POST">
+                                    <form method="POST" class="space-y-8">
                                         <input type="hidden" name="update_request" value="1">
                                         <input type="hidden" name="pickup_id" value="<?php echo $request['id']; ?>">
                                         
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                                            <div class="form-group mb-0">
-                                                <label class="font-black text-[10px] uppercase text-primary tracking-widest block mb-3">Your Contact Number</label>
-                                                <div class="relative">
-                                                     <i class="fa-solid fa-phone absolute left-4 top-1/2 -translate-y-1/2 text-primary/40 text-sm"></i>
-                                                     <input type="text" name="user_phone" class="form-control pl-12 py-4 bg-blue-50/30 border-blue-100 rounded-2xl font-bold focus:bg-white transition-all" value="<?php echo htmlspecialchars($request['user_phone']); ?>" required>
+                                        <div class="grid grid-cols-1 gap-8">
+                                            <!-- Contact Info Card -->
+                                            <div class="bg-blue-50/20 border border-blue-50 rounded-[2rem] p-8">
+                                                <label class="font-black text-[10px] uppercase text-primary tracking-[0.2em] block mb-4 ml-1">
+                                                    <i class="fa-solid fa-phone-volume mr-2"></i> Verified Contact Number
+                                                </label>
+                                                <div class="relative group">
+                                                     <i class="fa-solid fa-phone absolute left-6 top-1/2 -translate-y-1/2 text-primary/40 text-lg transition-transform group-focus-within:scale-110"></i>
+                                                     <input type="text" name="user_phone" class="form-control pl-16 py-6 bg-white border-gray-100 rounded-2xl font-black text-lg shadow-sm focus:ring-8 focus:ring-primary/5 transition-all" value="<?php echo htmlspecialchars($request['user_phone']); ?>" required placeholder="Enter primary contact number">
                                                 </div>
                                             </div>
-                                            <div class="form-group mb-0">
-                                                <label class="font-black text-[10px] uppercase text-primary tracking-widest block mb-3">Preferred Time</label>
-                                                <div class="relative">
-                                                     <i class="fa-solid fa-calendar-day absolute left-4 top-1/2 -translate-y-1/2 text-primary/40 text-sm"></i>
-                                                     <input type="datetime-local" name="scheduled_time" class="form-control pl-12 py-4 bg-blue-50/30 border-blue-100 rounded-2xl font-bold focus:bg-white transition-all" value="<?php echo date('Y-m-d\TH:i', strtotime($request['scheduled_time'] ?? $request['created_at'])); ?>" required>
+
+                                            <!-- Location Info Card -->
+                                            <div class="bg-slate-50/50 border border-slate-100 rounded-[2rem] p-8">
+                                                <label class="font-black text-[10px] uppercase text-slate-400 tracking-[0.2em] block mb-4 ml-1">
+                                                    <i class="fa-solid fa-compass mr-2"></i> Precise <?php echo ucfirst($request['type']); ?> Location
+                                                </label>
+                                                <div class="relative mb-4">
+                                                     <i class="fa-solid fa-location-arrow absolute left-6 top-1/2 -translate-y-1/2 text-primary text-lg"></i>
+                                                     <input type="text" name="address" id="addressInput" class="form-control pl-16 pr-32 py-6 bg-white border-gray-100 rounded-2xl font-bold text-gray-700 shadow-sm focus:ring-8 focus:ring-primary/5 transition-all" value="<?php echo htmlspecialchars($request['address']); ?>" required placeholder="Search or paste location address">
+                                                     <button type="button" id="searchAddressBtn" class="absolute right-3 top-1/2 -translate-y-1/2 btn btn-primary rounded-xl px-6 py-3 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-200 hover:scale-105 transition-all">
+                                                         Search
+                                                     </button>
+                                                </div>
+                                                
+                                                <!-- Map Visual -->
+                                                <div class="rounded-2xl overflow-hidden border-4 border-white shadow-xl relative group h-72">
+                                                    <div id="map" style="width: 100%; height: 100%; z-index: 1;"></div>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div class="form-group mb-10">
-                                            <label class="font-black text-[10px] uppercase text-primary tracking-widest block mb-3"><?php echo ucfirst($request['type']); ?> Location / Pin</label>
-                                            <div class="relative" style="position: relative;">
-                                                 <i class="fa-solid fa-location-arrow absolute left-4 top-1/2 -translate-y-1/2 text-primary text-sm"></i>
-                                                 <input type="text" name="address" id="addressInput" class="form-control pl-12 pr-24 py-4 bg-blue-50/30 border-blue-100 rounded-2xl font-bold focus:bg-white transition-all" value="<?php echo htmlspecialchars($request['address']); ?>" required placeholder="Search or paste location address">
-                                                 <button type="button" id="searchAddressBtn" class="btn btn-primary absolute right-2 top-1/2 -translate-y-1/2 rounded-xl px-4 font-bold uppercase text-xs tracking-wider shadow-sm transition-all" style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); height: 2.5rem; z-index: 10;">
-                                                     Search
-                                                 </button>
-                                            </div>
-                                            <input type="hidden" name="pickup_lat" id="latInput">
-                                            <input type="hidden" name="pickup_lng" id="lngInput">
-                                            <p class="text-[10px] text-muted mt-3 italic flex items-center gap-2">
-                                                <i class="fa-solid fa-info-circle"></i>
-                                                This address will be synchronized directly to the assigned driver's GPS system.
+                                        <input type="hidden" name="pickup_lat" id="latInput">
+                                        <input type="hidden" name="pickup_lng" id="lngInput">
+                                        
+                                        <div class="pt-4">
+                                            <button type="submit" class="btn btn-primary w-full py-6 rounded-2xl font-black uppercase tracking-[0.2em] shadow-2xl shadow-blue-200 hover:scale-[1.01] active:scale-95 transition-all text-sm flex items-center justify-center gap-3">
+                                                <i class="fa-solid fa-circle-check text-lg"></i>
+                                                Update Preferences & Confirm Logistics
+                                            </button>
+                                            <p class="text-[10px] text-muted mt-6 text-center italic flex items-center justify-center gap-2">
+                                                <i class="fa-solid fa-lock text-primary/40"></i>
+                                                This information is encrypted and shared only with your assigned driver.
                                             </p>
                                         </div>
-
-                                        <!-- UI Element: Map Visual -->
-                                        <div class="mb-10 rounded-3xl overflow-hidden border-4 border-gray-50 shadow-inner relative group h-80">
-                                            <div id="map" style="width: 100%; height: 100%; z-index: 1;"></div>
-                                        </div>
-                                        
-                                        <button type="submit" class="btn btn-primary w-full py-5 rounded-2xl font-black uppercase tracking-widest shadow-2xl shadow-blue-200 hover:scale-[1.01] active:scale-95 transition-all text-sm">
-                                            Update Preferences & Confirm Logistics
-                                        </button>
                                     </form>
                                 </div>
                             </div>

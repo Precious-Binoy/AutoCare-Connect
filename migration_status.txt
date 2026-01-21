@@ -1,0 +1,8 @@
+Checking table: bookings
+  Column 'mechanic_fee' exists.
+  Column 'has_pickup_delivery' exists.
+  Column 'final_cost' exists.
+  Column 'service_notes' exists.
+  Column 'is_billed' exists.
+Checking table: pickup_delivery
+  Column 'fee' exists.

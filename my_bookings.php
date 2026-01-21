@@ -109,7 +109,7 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                                             </td>
                                             <td class="p-5">
                                                 <span class="badge <?php echo getStatusBadgeClass($b['status']); ?> text-[9px] font-black uppercase tracking-tighter px-3 py-1 rounded-full">
-                                                    <?php echo str_replace('_', ' ', $b['status']); ?>
+                                                    <?php echo formatStatusLabel($b['status']); ?>
                                                 </span>
                                             </td>
                                             <td class="p-5 whitespace-nowrap">

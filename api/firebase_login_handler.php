@@ -182,6 +182,7 @@ try {
     $_SESSION['user_id'] = $user['id'] ?? $userId;
     $_SESSION['user_name'] = $user['name'] ?? $name;
     $_SESSION['user_email'] = $email;
+    $_SESSION['user_phone'] = $user['phone'] ?? $inputPhone ?? null;
     $_SESSION['user_role'] = $user['role'] ?? 'customer';
     $_SESSION['firebase_uid'] = $uid; // Store Firebase UID in session for reference
     $_SESSION['last_activity'] = time();

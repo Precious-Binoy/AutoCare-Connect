@@ -1,32 +1,53 @@
 <?php
 require_once 'config/db.php';
+
 $conn = getDbConnection();
 
-// 1. Add user_id to drivers if missing
-$res = $conn->query("SHOW COLUMNS FROM drivers LIKE 'user_id'");
-if ($res->num_rows == 0) {
-    echo "Adding user_id to drivers table...\n";
-    $conn->query("ALTER TABLE drivers ADD COLUMN user_id INT(11) AFTER id, ADD INDEX(user_id)");
-}
+$alterBookings = [
+    "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS mechanic_fee DECIMAL(10,2) DEFAULT 0.00 AFTER service_type",
+    "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS has_pickup_delivery TINYINT(1) DEFAULT 0 AFTER mechanic_id",
+    "ALTER TABLE bookings MODIFY COLUMN final_cost DECIMAL(10,2) DEFAULT 0.00",
+    "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS service_notes TEXT AFTER final_cost",
+    "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_billed BOOLEAN DEFAULT FALSE AFTER service_notes"
+];
 
-// 2. Add vehicle_info to drivers for consistency (User requested it via error message reference)
-$res = $conn->query("SHOW COLUMNS FROM drivers LIKE 'vehicle_info'");
-if ($res->num_rows == 0) {
-    echo "Adding vehicle_info to drivers table...\n";
-    $conn->query("ALTER TABLE drivers ADD COLUMN vehicle_info TEXT AFTER vehicle_number");
-}
-
-// 3. Try to link existing drivers to users by email
-$res = $conn->query("SELECT id, email FROM drivers WHERE user_id IS NULL OR user_id = 0");
-while ($row = $res->fetch_assoc()) {
-    $email = $row['email'];
-    $uRes = $conn->query("SELECT id FROM users WHERE email = '$email'");
-    if ($uRes && $uRow = $uRes->fetch_assoc()) {
-        $uid = $uRow['id'];
-        $did = $row['id'];
-        $conn->query("UPDATE drivers SET user_id = $uid WHERE id = $did");
-        echo "Linked driver $email to user ID $uid\n";
+foreach ($alterBookings as $sql) {
+    if ($conn->query($sql)) {
+        echo "Executed: $sql\n";
+    } else {
+        echo "Error: " . $conn->error . " in $sql\n";
     }
 }
 
-echo "Migration complete.\n";
+$alterPickupDelivery = [
+    "ALTER TABLE pickup_delivery ADD COLUMN IF NOT EXISTS fee DECIMAL(10,2) DEFAULT 0.00"
+];
+
+foreach ($alterPickupDelivery as $sql) {
+    if ($conn->query($sql)) {
+        echo "Executed: $sql\n";
+    } else {
+        echo "Error: " . $conn->error . " in $sql\n";
+    }
+}
+
+// Also check parts_used table
+$createPartsUsed = "CREATE TABLE IF NOT EXISTS parts_used (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id INT NOT NULL,
+    part_name VARCHAR(255) NOT NULL,
+    quantity INT DEFAULT 1,
+    unit_price DECIMAL(10,2) DEFAULT 0.00,
+    total_price DECIMAL(10,2) DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+)";
+
+if ($conn->query($createPartsUsed)) {
+    echo "Checked parts_used table.\n";
+} else {
+    echo "Error creating parts_used: " . $conn->error . "\n";
+}
+
+echo "Migration finished.\n";
+?>

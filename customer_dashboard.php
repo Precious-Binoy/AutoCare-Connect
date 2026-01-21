@@ -1,5 +1,6 @@
 <?php 
 $page_title = 'Dashboard'; 
+$current_page = 'customer_dashboard.php';
 require_once 'includes/auth.php';
 
 // Require login
@@ -13,7 +14,7 @@ $vehiclesQuery = "SELECT COUNT(*) as total FROM vehicles WHERE user_id = ?";
 $vehiclesResult = executeQuery($vehiclesQuery, [$userId], 'i');
 $totalVehicles = $vehiclesResult ? $vehiclesResult->fetch_assoc()['total'] : 0;
 
-$activeQuery = "SELECT COUNT(*) as total FROM bookings WHERE user_id = ? AND status IN ('in_progress', 'confirmed')";
+$activeQuery = "SELECT COUNT(*) as total FROM bookings WHERE user_id = ? AND status IN ('in_progress', 'confirmed', 'ready_for_delivery')";
 $activeResult = executeQuery($activeQuery, [$userId], 'i');
 $activeServices = $activeResult ? $activeResult->fetch_assoc()['total'] : 0;
 
@@ -24,7 +25,7 @@ $pickupQuery = "SELECT COUNT(DISTINCT pd.booking_id) as total
 $pickupResult = executeQuery($pickupQuery, [$userId], 'i');
 $pickupRequests = $pickupResult ? $pickupResult->fetch_assoc()['total'] : 0;
 
-$completedQuery = "SELECT COUNT(*) as total FROM bookings WHERE user_id = ? AND status = 'completed'";
+$completedQuery = "SELECT COUNT(*) as total FROM bookings WHERE user_id = ? AND status IN ('completed', 'delivered')";
 $completedResult = executeQuery($completedQuery, [$userId], 'i');
 $completedServices = $completedResult ? $completedResult->fetch_assoc()['total'] : 0;
 
@@ -47,7 +48,7 @@ if ($recentResult) {
 }
 
 // Check for active deliveries with expanded driver info
-$deliveryQuery = "SELECT pd.id, pd.status, pd.driver_name, pd.driver_phone, pd.type, v.make, v.model, v.license_plate, v.color,
+$deliveryQuery = "SELECT pd.id, pd.booking_id, pd.status, pd.driver_name, pd.driver_phone, pd.type, v.make, v.model, v.license_plate, v.color,
                          b.status as booking_status,
                          d.license_number, d.vehicle_info as driver_vehicle, 
                          u_d.profile_image as driver_image
@@ -137,55 +138,58 @@ if ($garageResult) {
                             <?php endif; ?>
                         </div>
 
-                        <!-- Mini Timeline Strip -->
-                        <div class="bg-gray-50/80 px-6 py-6 border-t border-gray-100 flex flex-col gap-4">
+                        <!-- Modern Timeline Strip -->
+                        <div class="bg-gray-50/80 px-6 py-6 border-t border-gray-100">
                             <?php 
                                 $bStatus = $activeDelivery['booking_status'] ?? 'pending';
+                                $pdStatus = $activeDelivery['status'];
+                                $pdType = $activeDelivery['type'];
                                 
-                                // 5-Step Timeline Logic
-                                $step1 = true; // Booked
-                                $step2 = !in_array($bStatus, ['pending']); // Confirmed
-                                $step3 = in_array($bStatus, ['in_progress', 'ready_for_delivery', 'completed']); // In Service
-                                $step4 = in_array($bStatus, ['ready_for_delivery', 'completed']); // Ready
-                                $step5 = $bStatus == 'completed'; // Completed
+                                $activeIndex = 0;
+                                if ($bStatus == 'pending') $activeIndex = 0;
+                                if ($activeDelivery['type'] == 'pickup') {
+                                    if ($pdStatus == 'scheduled' || $pdStatus == 'in_transit') $activeIndex = 1;
+                                }
+                                if ($bStatus == 'confirmed') $activeIndex = 1;
+                                if ($bStatus == 'in_progress') $activeIndex = 2;
+                                if ($bStatus == 'ready_for_delivery') $activeIndex = 3;
+                                if ($bStatus == 'delivered' || $bStatus == 'completed') $activeIndex = 4;
                                 
-                                $progressWidth = '0%';
-                                if ($step5) $progressWidth = '100%';
-                                elseif ($step4) $progressWidth = '75%';
-                                elseif ($step3) $progressWidth = '50%';
-                                elseif ($step2) $progressWidth = '25%';
-                                else $progressWidth = '0%';
+                                $progressWidth = ($activeIndex / 4) * 100 . '%';
                             ?>
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs font-bold text-muted uppercase tracking-wider">Service Progress</span>
-                                <a href="track_service.php" class="text-xs font-bold text-primary hover:underline">Full Tracking <i class="fa-solid fa-arrow-right ml-1"></i></a>
+                            <div class="flex items-center justify-between mb-8">
+                                <span class="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
+                                    Live Service Progression
+                                </span>
+                                <a href="track_service.php?id=<?php echo $activeDelivery['booking_id']; ?>" class="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-primary transition-colors">Full Details <i class="fa-solid fa-chevron-right ml-1"></i></a>
                             </div>
 
-                            <div class="timeline-horizontal" style="padding: 1.5rem 0; margin: 0;">
+                            <div class="timeline-horizontal">
                                 <div class="timeline-progress" style="width: <?php echo $progressWidth; ?>;"></div>
                                 
-                                <div class="timeline-step completed">
-                                    <div class="timeline-dot"><i class="fa-solid fa-calendar-check"></i></div>
+                                <div class="timeline-step <?php echo $activeIndex >= 0 ? ($activeIndex > 0 ? 'completed' : 'active') : ''; ?>">
+                                    <div class="timeline-dot"><i class="fa-solid fa-calendar-check text-[10px]"></i></div>
                                     <div class="timeline-label">Booked</div>
                                 </div>
                                 
-                                <div class="timeline-step <?php echo ($bStatus == 'confirmed') ? 'active' : ($step2 ? 'completed' : ''); ?>">
-                                    <div class="timeline-dot"><i class="fa-solid fa-clipboard-check"></i></div>
-                                    <div class="timeline-label">Confirmed</div>
+                                <div class="timeline-step <?php echo $activeIndex >= 1 ? ($activeIndex > 1 ? 'completed' : 'active') : ''; ?>">
+                                    <div class="timeline-dot"><i class="fa-solid fa-truck-pickup text-[10px]"></i></div>
+                                    <div class="timeline-label">Pickup</div>
                                 </div>
                                 
-                                <div class="timeline-step <?php echo ($bStatus == 'in_progress') ? 'active' : ($step3 ? 'completed' : ''); ?>">
-                                    <div class="timeline-dot"><i class="fa-solid fa-screwdriver-wrench"></i></div>
-                                    <div class="timeline-label">Service</div>
+                                <div class="timeline-step <?php echo $activeIndex >= 2 ? ($activeIndex > 2 ? 'completed' : 'active') : ''; ?>">
+                                    <div class="timeline-dot"><i class="fa-solid fa-screwdriver-wrench text-[10px]"></i></div>
+                                    <div class="timeline-label">Repair</div>
                                 </div>
                                 
-                                <div class="timeline-step <?php echo ($bStatus == 'ready_for_delivery') ? 'active' : ($step4 ? 'completed' : ''); ?>">
-                                    <div class="timeline-dot"><i class="fa-solid fa-car-side"></i></div>
-                                    <div class="timeline-label">Ready</div>
+                                <div class="timeline-step <?php echo $activeIndex >= 3 ? ($activeIndex > 3 ? 'completed' : 'active') : ''; ?>">
+                                    <div class="timeline-dot"><i class="fa-solid fa-truck-fast text-[10px]"></i></div>
+                                    <div class="timeline-label">Delivery</div>
                                 </div>
 
-                                <div class="timeline-step <?php echo $step5 ? 'completed' : ''; ?>">
-                                    <div class="timeline-dot"><i class="fa-solid fa-flag-checkered"></i></div>
+                                <div class="timeline-step <?php echo $activeIndex >= 4 ? 'completed' : ''; ?>">
+                                    <div class="timeline-dot"><i class="fa-solid fa-flag-checkered text-[10px]"></i></div>
                                     <div class="timeline-label">Done</div>
                                 </div>
                             </div>
@@ -291,7 +295,7 @@ if ($garageResult) {
                                                 </div>
                                             </div>
                                             <div class="text-right">
-                                                <span class="badge <?php echo getStatusBadgeClass($booking['status']); ?> uppercase text-[10px]"><?php echo htmlspecialchars(str_replace('_', ' ', $booking['status'])); ?></span>
+                                                <span class="badge <?php echo getStatusBadgeClass($booking['status']); ?> uppercase text-[10px]"><?php echo formatStatusLabel($booking['status']); ?></span>
                                                 <div class="mt-2 text-primary font-bold text-sm"><a href="track_service.php?id=<?php echo $booking['id']; ?>"><i class="fa-solid fa-arrow-right"></i></a></div>
                                             </div>
                                         </div>

@@ -70,6 +70,16 @@ function getStatusBadgeClass($status) {
 }
 
 /**
+ * Format status label for display
+ * @param string $status
+ * @return string
+ */
+function formatStatusLabel($status) {
+    if ($status === 'delivered') return 'Completed';
+    return ucfirst(str_replace('_', ' ', $status));
+}
+
+/**
  * Send JSON response and exit
  * @param array $data
  * @param int $statusCode

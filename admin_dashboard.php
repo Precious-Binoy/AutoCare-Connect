@@ -22,12 +22,12 @@ $pendingBookingsResult = executeQuery($pendingBookingsQuery, [], '');
 $pendingBookings = $pendingBookingsResult ? $pendingBookingsResult->fetch_assoc()['count'] : 0;
 
 // In progress bookings
-$inProgressQuery = "SELECT COUNT(*) as count FROM bookings WHERE status = 'in_progress'";
+$inProgressQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('in_progress', 'ready_for_delivery')";
 $inProgressResult = executeQuery($inProgressQuery, [], '');
 $inProgressBookings = $inProgressResult ? $inProgressResult->fetch_assoc()['count'] : 0;
 
 // Completed today
-$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE status = 'completed' AND DATE(completion_date) = CURDATE()";
+$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('completed', 'delivered') AND DATE(completion_date) = CURDATE()";
 $completedTodayResult = executeQuery($completedTodayQuery, [], '');
 $completedToday = $completedTodayResult ? $completedTodayResult->fetch_assoc()['count'] : 0;
 
@@ -47,7 +47,7 @@ $totalCustomersResult = executeQuery($totalCustomersQuery, [], '');
 $totalCustomers = $totalCustomersResult ? $totalCustomersResult->fetch_assoc()['count'] : 0;
 
 // Today's revenue
-$todayRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE status = 'completed' AND DATE(completion_date) = CURDATE()";
+$todayRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE status IN ('completed', 'delivered') AND DATE(completion_date) = CURDATE()";
 $todayRevenueResult = executeQuery($todayRevenueQuery, [], '');
 $todayRevenue = $todayRevenueResult ? ($todayRevenueResult->fetch_assoc()['revenue'] ?? 0) : 0;
 
@@ -271,7 +271,7 @@ if ($recentActivityResult) {
                                     // Determine status badge color
                                     $badgeClass = 'badge-info';
                                     if ($activity['status'] === 'pending') $badgeClass = 'badge-warning';
-                                    elseif ($activity['status'] === 'completed') $badgeClass = 'badge-success';
+                                    elseif ($activity['status'] === 'completed' || $activity['status'] === 'delivered') $badgeClass = 'badge-success';
                                     elseif ($activity['status'] === 'in_progress') $badgeClass = 'badge-info';
                                     elseif ($activity['status'] === 'ready_for_delivery') $badgeClass = 'badge-primary';
                                     elseif ($activity['status'] === 'cancelled') $badgeClass = 'badge-danger';
@@ -296,7 +296,7 @@ if ($recentActivityResult) {
                                             </div>
                                         </div>
                                         <div class="text-right">
-                                            <span class="badge <?php echo $badgeClass; ?> text-[10px]"><?php echo strtoupper(str_replace('_', ' ', $activity['status'])); ?></span>
+                                            <span class="badge <?php echo $badgeClass; ?> text-[10px]"><?php echo strtoupper(formatStatusLabel($activity['status'])); ?></span>
                                             <div class="text-[10px] text-muted mt-1"><?php echo $timeAgo; ?></div>
                                         </div>
                                     </div>
@@ -395,7 +395,7 @@ if ($recentActivityResult) {
                                                 </td>
                                                 <td class="p-4 text-right">
                                                     <span class="badge <?php echo getStatusBadgeClass($service['status']); ?> text-[10px] px-3 py-1 rounded-full font-bold uppercase">
-                                                        <?php echo str_replace('_', ' ', $service['status']); ?>
+                                                        <?php echo formatStatusLabel($service['status']); ?>
                                                     </span>
                                                 </td>
                                             </tr>

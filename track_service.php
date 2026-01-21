@@ -1,5 +1,6 @@
 <?php 
 $page_title = 'Track Service'; 
+$current_page = 'track_service.php';
 require_once 'includes/auth.php';
 requireLogin();
 
@@ -116,21 +117,48 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                 </div>
                             </div>
 
-                            <!-- Driver Card -->
+                            <!-- Driver Cards (Loop for Pickup and Delivery) -->
                             <?php 
-                                // Fetch driver for this booking
-                                $driverQuery = "SELECT driver_name, driver_phone, status, type FROM pickup_delivery WHERE booking_id = ? AND status != 'completed' ORDER BY created_at DESC LIMIT 1";
+                                // Fetch ALL drivers for this booking (both pickup and delivery)
+                                $driverQuery = "SELECT driver_name, driver_phone, status, type FROM pickup_delivery WHERE booking_id = ? ORDER BY created_at ASC";
                                 $driverRes = executeQuery($driverQuery, [$booking_id], 'i');
-                                $activeDriver = $driverRes ? $driverRes->fetch_assoc() : null;
+                                $drivers = [];
+                                if ($driverRes) {
+                                    while ($d = $driverRes->fetch_assoc()) {
+                                        $drivers[] = $d;
+                                    }
+                                }
+                                
+                                // If no drivers scheduled but booking status implies it (e.g., pending)
+                                if (empty($drivers) && $booking['has_pickup_delivery']) {
+                                    $drivers[] = [
+                                        'type' => 'pickup', // Default assumption
+                                        'driver_name' => '',
+                                        'driver_phone' => '',
+                                        'status' => 'pending'
+                                    ];
+                                }
                             ?>
+
+                            <?php foreach ($drivers as $activeDriver): ?>
                             <div class="card p-4 flex flex-col gap-3">
                                 <div class="flex items-center gap-3">
                                     <div class="avatar bg-secondary text-white flex items-center justify-center rounded-xl text-xl font-bold" style="width: 45px; height: 45px;">
                                         <i class="fa-solid fa-truck"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <div class="text-[10px] text-muted uppercase font-bold tracking-wider">Driver / Logistics</div>
-                                        <div class="font-bold"><?php echo htmlspecialchars($activeDriver['driver_name'] ?? ($booking['status'] == 'pending' ? 'Waiting for Confirmation' : 'No Pickup/Delivery Active')); ?></div>
+                                        <div class="text-[10px] text-muted uppercase font-bold tracking-wider"><?php echo ucfirst($activeDriver['type']); ?> Driver</div>
+                                        <div class="font-bold">
+                                            <?php 
+                                            if (!empty($activeDriver['driver_name'])) {
+                                                echo htmlspecialchars($activeDriver['driver_name']);
+                                            } elseif ($activeDriver) {
+                                                echo 'Driver Assignment Pending';
+                                            } else {
+                                                echo 'No Active Driver';
+                                            }
+                                            ?>
+                                        </div>
                                     </div>
                                     <?php if ($activeDriver && $activeDriver['driver_phone']): ?>
                                         <button onclick="copyToClipboard('<?php echo $activeDriver['driver_phone']; ?>')" class="btn btn-sm btn-outline px-2" title="Copy Number">
@@ -146,72 +174,76 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                     </div>
                                 <?php endif; ?>
                             </div>
+                            <?php endforeach; ?>
                         </div>
                     </div>
 
                     <!-- Enhanced Tracker Component -->
                     <div class="card p-10 mb-8 overflow-x-auto">
-                        <div class="text-center mb-6">
+                        <div class="text-center mb-8">
                             <h3 class="font-bold text-lg">Service Progress Journey</h3>
                         </div>
                         <?php 
                             // Determine if booking has pickup/delivery
                             $hasPickupDelivery = $booking['has_pickup_delivery'] ?? false;
                             $bStatus = $booking['status'];
-                            $stepIndex = 1;
+                            $activeIndex = 0;
                             
                             if ($hasPickupDelivery) {
-                                // Pickup/Delivery Flow: Booked → Pickup → In Workshop → Ready for Delivery → Delivered
-                                if ($bStatus == 'confirmed') $stepIndex = 2;
-                                if ($activeDriver && $activeDriver['type'] == 'pickup' && $activeDriver['status'] != 'completed') $stepIndex = 2;
-                                if ($bStatus == 'in_progress') $stepIndex = 3;
-                                if ($bStatus == 'ready_for_delivery') $stepIndex = 4;
-                                if ($activeDriver && $activeDriver['type'] == 'delivery' && $activeDriver['status'] != 'completed') $stepIndex = 4;
-                                if ($bStatus == 'delivered') $stepIndex = 5;
+                                // Pickup/Delivery Flow: Booked → Pickup → Repair → Delivery → Done
+                                if ($bStatus == 'confirmed') $activeIndex = 1;
+                                if ($activeDriver && $activeDriver['type'] == 'pickup' && $activeDriver['status'] != 'completed') $activeIndex = 1;
+                                if ($bStatus == 'in_progress') $activeIndex = 2;
+                                if ($bStatus == 'ready_for_delivery') $activeIndex = 3;
+                                if ($activeDriver && $activeDriver['type'] == 'delivery' && $activeDriver['status'] != 'completed') $activeIndex = 3;
+                                if ($bStatus == 'delivered' || $bStatus == 'completed') $activeIndex = 4;
                             } else {
-                                // Self-Pickup Flow: Booked → Arrived → In Workshop → Work Done → Collected
-                                if ($bStatus == 'confirmed') $stepIndex = 2;
-                                if ($bStatus == 'in_progress') $stepIndex = 3;
-                                if ($bStatus == 'completed' || $bStatus == 'ready_for_delivery') $stepIndex = 4;
-                                if ($bStatus == 'delivered') $stepIndex = 5;
+                                // Self-Pickup Flow: Booked → Arrived → Repair → Ready → Collected
+                                if ($bStatus == 'confirmed') $activeIndex = 1;
+                                if ($bStatus == 'in_progress') $activeIndex = 2;
+                                if ($bStatus == 'completed' || $bStatus == 'ready_for_delivery') $activeIndex = 3;
+                                if ($bStatus == 'delivered') $activeIndex = 4;
                             }
-                        ?>
-                        <div class="progress-track" style="margin: 1.5rem 0; min-width: 700px;">
-                            <div class="progress-line" style="height: 4px; background: #E2E8F0;"></div>
-                            <div class="progress-line-fill" style="height: 4px; background: var(--primary); transition: width 1s ease-in-out; width: <?php echo max(0, ($stepIndex - 1) * 25); ?>%;"></div>
 
-                            <!-- Step 1: Confirmed -->
-                            <div class="progress-step">
-                                <div class="step-circle <?php echo $stepIndex >= 1 ? 'completed' : ''; ?>"><i class="fa-solid fa-check"></i></div>
-                                <div class="font-bold text-xs mt-2">Booked</div>
+                            $progressWidth = ($activeIndex / 4) * 100 . '%';
+                        ?>
+                        <div class="timeline-horizontal" style="min-width: 700px;">
+                            <div class="timeline-progress" style="width: <?php echo $progressWidth; ?>;"></div>
+
+                            <!-- Step 1: Booked -->
+                            <div class="timeline-step <?php echo $activeIndex >= 0 ? ($activeIndex > 0 ? 'completed' : 'active') : ''; ?>">
+                                <div class="timeline-dot"><i class="fa-solid fa-calendar-check"></i></div>
+                                <div class="timeline-label">Booked</div>
                             </div>
+
                             <!-- Step 2: Pickup/Arrived -->
-                            <div class="progress-step">
-                                <div class="step-circle <?php echo $stepIndex >= 2 ? ($stepIndex == 2 ? 'active' : 'completed') : ''; ?>">
-                                    <i class="fa-solid <?php echo $hasPickupDelivery ? 'fa-truck-pickup' : 'fa-location-dot'; ?>"></i>
+                            <div class="timeline-step <?php echo $activeIndex >= 1 ? ($activeIndex > 1 ? 'completed' : 'active') : ''; ?>">
+                                <div class="timeline-dot">
+                                    <i class="fa-solid <?php echo $hasPickupDelivery ? 'fa-truck-pickup' : 'fa-warehouse'; ?>"></i>
                                 </div>
-                                <div class="font-bold text-xs mt-2"><?php echo $hasPickupDelivery ? 'Pickup' : 'Arrived'; ?></div>
+                                <div class="timeline-label"><?php echo $hasPickupDelivery ? 'Pickup' : 'Arrival'; ?></div>
                             </div>
-                            <!-- Step 3: Service -->
-                            <div class="progress-step">
-                                <div class="step-circle <?php echo $stepIndex >= 3 ? ($stepIndex == 3 ? 'active' : 'completed') : ''; ?>">
-                                    <i class="fa-solid fa-screwdriver-wrench <?php echo ($stepIndex == 3) ? 'fa-spin' : ''; ?>"></i>
+
+                            <!-- Step 3: Repair -->
+                            <div class="timeline-step <?php echo $activeIndex >= 2 ? ($activeIndex > 2 ? 'completed' : 'active') : ''; ?>">
+                                <div class="timeline-dot">
+                                    <i class="fa-solid fa-screwdriver-wrench <?php echo ($activeIndex == 2) ? 'fa-spin' : ''; ?>"></i>
                                 </div>
-                                <div class="font-bold text-xs mt-2">In Workshop</div>
+                                <div class="timeline-label">Service</div>
                             </div>
-                            <!-- Step 4: Delivery/Work Done -->
-                            <div class="progress-step">
-                                <div class="step-circle <?php echo $stepIndex >= 4 ? ($stepIndex == 4 ? 'active' : 'completed') : ''; ?>">
-                                    <i class="fa-solid <?php echo $hasPickupDelivery ? 'fa-car-side' : 'fa-clipboard-check'; ?>"></i>
+
+                            <!-- Step 4: Delivery/Ready -->
+                            <div class="timeline-step <?php echo $activeIndex >= 3 ? ($activeIndex > 3 ? 'completed' : 'active') : ''; ?>">
+                                <div class="timeline-dot">
+                                    <i class="fa-solid <?php echo $hasPickupDelivery ? 'fa-truck-fast' : 'fa-car-side'; ?>"></i>
                                 </div>
-                                <div class="font-bold text-xs mt-2"><?php echo $hasPickupDelivery ? 'Delivery' : 'Work Done'; ?></div>
+                                <div class="timeline-label"><?php echo $hasPickupDelivery ? 'Delivery' : 'Ready'; ?></div>
                             </div>
+
                             <!-- Step 5: Done -->
-                            <div class="progress-step">
-                                <div class="step-circle <?php echo $stepIndex == 5 ? 'completed' : ''; ?>">
-                                    <i class="fa-solid fa-flag-checkered"></i>
-                                </div>
-                                <div class="font-bold text-xs mt-2"><?php echo $hasPickupDelivery ? 'Delivered' : 'Collected'; ?></div>
+                            <div class="timeline-step <?php echo $activeIndex >= 4 ? 'completed' : ''; ?>">
+                                <div class="timeline-dot"><i class="fa-solid fa-flag-checkered"></i></div>
+                                <div class="timeline-label">Completed</div>
                             </div>
                         </div>
                     </div>
@@ -264,26 +296,86 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                         </div>
                                         <div>
                                             <h3 class="text-lg font-black text-gray-900">Service Invoice</h3>
-                                            <p class="text-xs text-muted">Payment Details</p>
+                                            <p class="text-xs text-muted">Itemized Breakdown</p>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <!-- Bill Amount -->
+                                <!-- Bill Details -->
                                 <div class="p-6 bg-white">
-                                    <div class="text-center mb-6 pb-6 border-b border-gray-100">
+                                    <div class="space-y-4 mb-6">
+                                        <!-- Labor -->
+                                        <div class="flex justify-between items-center text-sm">
+                                            <span class="text-muted font-medium">Mechanic Labor / Service Fee</span>
+                                            <span class="font-black text-gray-900">₹<?php echo number_format($booking['mechanic_fee'] ?? 0, 2); ?></span>
+                                        </div>
+
+                                        <!-- Parts -->
+                                        <?php 
+                                            $partsQuery = "SELECT * FROM parts_used WHERE booking_id = ?";
+                                            $partsRes = executeQuery($partsQuery, [$booking_id], 'i');
+                                            $parts = [];
+                                            if ($partsRes) {
+                                                while ($pRow = $partsRes->fetch_assoc()) {
+                                                    $parts[] = $pRow;
+                                                }
+                                            }
+                                            $partsTotal = 0;
+                                            if (!empty($parts)):
+                                        ?>
+                                        <div class="pt-4 border-t border-gray-50">
+                                            <div class="text-[10px] font-black uppercase text-gray-400 mb-2">Parts & Products</div>
+                                            <?php foreach ($parts as $part): 
+                                                $partsTotal += $part['total_price'];
+                                            ?>
+                                                <div class="flex justify-between items-center text-sm mb-1">
+                                                    <span class="text-gray-600"><?php echo htmlspecialchars($part['part_name']); ?> <span class="text-[10px] text-muted">(x<?php echo $part['quantity']; ?>)</span></span>
+                                                    <span class="font-bold">₹<?php echo number_format($part['total_price'], 2); ?></span>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <?php endif; ?>
+
+                                        <!-- Logistics -->
+                                        <?php 
+                                            $logQuery = "SELECT type, fee FROM pickup_delivery WHERE booking_id = ? AND fee > 0";
+                                            $logRes = executeQuery($logQuery, [$booking_id], 'i');
+                                            $logItems = [];
+                                            if ($logRes) {
+                                                while ($lRow = $logRes->fetch_assoc()) {
+                                                    $logItems[] = $lRow;
+                                                }
+                                            }
+                                            $logTotal = 0;
+                                            if (!empty($logItems)):
+                                        ?>
+                                        <div class="pt-4 border-t border-gray-50">
+                                            <div class="text-[10px] font-black uppercase text-gray-400 mb-2">Logistics Fees</div>
+                                            <?php foreach ($logItems as $log): 
+                                                $logTotal += $log['fee'];
+                                            ?>
+                                                <div class="flex justify-between items-center text-sm mb-1">
+                                                    <span class="text-gray-600 capitalize"><?php echo htmlspecialchars($log['type']); ?> Service</span>
+                                                    <span class="font-bold">₹<?php echo number_format($log['fee'], 2); ?></span>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="text-center py-6 border-t-2 border-dashed border-gray-100 mb-6">
                                         <div class="text-xs font-bold uppercase text-muted mb-2 tracking-wider">Total Amount Due</div>
-                                        <div class="text-4xl font-black text-green-600">₹<?php echo number_format($booking['bill_amount'], 2); ?></div>
+                                        <div class="text-4xl font-black text-green-600">₹<?php echo number_format($booking['final_cost'] ?? 0, 2); ?></div>
                                     </div>
                                     
                                     <!-- Service Notes -->
                                     <div class="mb-6">
                                         <div class="flex items-center gap-2 mb-3">
-                                            <i class="fa-solid fa-clipboard-list text-primary"></i>
-                                            <h4 class="font-bold text-sm uppercase tracking-wider text-gray-700">Work Summary & Parts</h4>
+                                            <i class="fa-solid fa-comment-dots text-primary"></i>
+                                            <h4 class="font-bold text-sm uppercase tracking-wider text-gray-700">Mechanic Notes</h4>
                                         </div>
                                         <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                            <p class="text-sm text-gray-700 leading-relaxed"><?php echo nl2br(htmlspecialchars($booking['service_notes'] ?? 'No additional notes provided.')); ?></p>
+                                            <p class="text-sm text-gray-700 italic leading-relaxed"><?php echo nl2br(htmlspecialchars($booking['service_notes'] ?? 'No specific notes from mechanic.')); ?></p>
                                         </div>
                                     </div>
                                     
@@ -297,12 +389,12 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                 </div>
                             </div>
                             <?php else: ?>
-                            <div class="card p-10 bg-gray-50 border-2 border-dashed border-gray-200 text-center flex flex-col items-center justify-center">
-                                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                    <i class="fa-solid fa-hourglass-half text-3xl text-gray-300"></i>
+                            <div class="card p-10 bg-white border-2 border-dashed border-gray-200 text-center flex flex-col items-center justify-center">
+                                <div class="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4 text-gray-300">
+                                    <i class="fa-solid fa-hourglass-half text-3xl"></i>
                                 </div>
-                                <h4 class="font-bold text-gray-600 text-lg mb-2">Billing Pending</h4>
-                                <p class="text-sm text-muted max-w-xs">Invoice will be generated once the mechanic completes the service work.</p>
+                                <h4 class="font-black text-gray-800 text-lg mb-2">Final Bill Pending</h4>
+                                <p class="text-sm text-muted max-w-[200px] mx-auto">Your itemized invoice is being prepared by our mechanic. It will appear here shortly.</p>
                             </div>
                             <?php endif; ?>
                         </div>
