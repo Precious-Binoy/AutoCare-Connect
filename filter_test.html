@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Filter Test</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #1e293b;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .filters {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            align-items: center;
+        }
+
+        #resultsCounter {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        select {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            width: 180px;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th,
+        td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+
+        tbody tr {
+            transition: background 0.15s;
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        .badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-in_progress {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-ready_for_delivery {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .badge-completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .text-primary {
+            color: #3b82f6;
+        }
+
+        .font-bold {
+            font-weight: 700;
+        }
+
+        .test-box {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            border-radius: 4px;
+        }
+
+        .test-box h3 {
+            color: #1e40af;
+            margin-bottom: 12px;
+        }
+
+        .test-box ol {
+            margin-left: 20px;
+            color: #1e3a8a;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>✅ Status Filter Only - Simplified</h1>
+        <p class="subtitle">Search removed, filter only by booking status</p>
+
+        <div class="filters">
+            <div id="resultsCounter"></div>
+            <select id="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="ready_for_delivery">Ready for Delivery</option>
+                <option value="completed">Completed</option>
+            </select>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Booking ID</th>
+                    <th>Customer</th>
+                    <th>Service</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-status="pending">
+                    <td><strong>#BK-12345</strong></td>
+                    <td>John Doe</td>
+                    <td>Oil Change</td>
+                    <td><span class="badge badge-pending">PENDING</span></td>
+                </tr>
+                <tr data-status="in_progress">
+                    <td><strong>#BK-67890</strong></td>
+                    <td>Jane Smith</td>
+                    <td>Brake Repair</td>
+                    <td><span class="badge badge-in_progress">IN PROGRESS</span></td>
+                </tr>
+                <tr data-status="ready_for_delivery">
+                    <td><strong>#BK-11111</strong></td>
+                    <td>Bob Johnson</td>
+                    <td>Tire Rotation</td>
+                    <td><span class="badge badge-ready_for_delivery">READY FOR DELIVERY</span></td>
+                </tr>
+                <tr data-status="completed">
+                    <td><strong>#BK-22222</strong></td>
+                    <td>Alice Williams</td>
+                    <td>Battery Check</td>
+                    <td><span class="badge badge-completed">COMPLETED</span></td>
+                </tr>
+                <tr data-status="pending">
+                    <td><strong>#BK-33333</strong></td>
+                    <td>Charlie Brown</td>
+                    <td>Engine Diagnostic</td>
+                    <td><span class="badge badge-pending">PENDING</span></td>
+                </tr>
+                <tr data-status="in_progress">
+                    <td><strong>#BK-44444</strong></td>
+                    <td>David Lee</td>
+                    <td>AC Repair</td>
+                    <td><span class="badge badge-in_progress">IN PROGRESS</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="test-box">
+            <h3>🧪 Test Instructions</h3>
+            <ol>
+                <li>Select "Pending" → Should show 2 bookings (John Doe, Charlie Brown)</li>
+                <li>Select "In Progress" → Should show 2 bookings (Jane Smith, David Lee)</li>
+                <li>Select "Ready for Delivery" → Should show 1 booking (Bob Johnson)</li>
+                <li>Select "Completed" → Should show 1 booking (Alice Williams)</li>
+                <li>Select "All Statuses" → Should show all 6 bookings, counter disappears</li>
+            </ol>
+            <p style="margin-top: 15px; color: #1e3a8a;"><strong>✓ Search removed</strong> - Only status filtering
+                available</p>
+        </div>
+    </div>
+
+    <script>
+        // Status Filter functionality
+        document.addEventListener('DOMContentLoaded', function () {
+            const statusFilter = document.getElementById('statusFilter');
+            const resultsCounter = document.getElementById('resultsCounter');
+
+            // Function to apply status filter
+            function applyFilter() {
+                const selectedStatus = statusFilter ? statusFilter.value.toLowerCase() : '';
+
+                // Get all table rows
+                const allRows = document.querySelectorAll('table tbody tr');
+                let visibleCount = 0;
+
+                allRows.forEach(row => {
+                    // Skip empty state rows (those with colspan)
+                    if (row.querySelector('td[colspan]')) {
+                        return;
+                    }
+
+                    // Get row status from data-status attribute
+                    const rowStatus = (row.getAttribute('data-status') || '').toLowerCase();
+
+                    // Check if status matches (or if "All Statuses" is selected)
+                    const shouldShow = selectedStatus === '' || rowStatus === selectedStatus;
+
+                    // Show or hide row
+                    row.style.display = shouldShow ? '' : 'none';
+
+                    if (shouldShow) {
+                        visibleCount++;
+                    }
+                });
+
+                // Update results counter
+                if (resultsCounter) {
+                    if (selectedStatus) {
+                        resultsCounter.innerHTML = `<i class="fa-solid fa-filter text-primary"></i> <span class="font-bold">${visibleCount}</span> booking${visibleCount !== 1 ? 's' : ''} found`;
+                    } else {
+                        resultsCounter.innerHTML = '';
+                    }
+                }
+            }
+
+            // Add event listener to status filter
+            if (statusFilter) {
+                statusFilter.addEventListener('change', applyFilter);
+            }
+        });
+    </script>
+</body>
+
+</html>

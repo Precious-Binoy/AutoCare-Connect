@@ -17,9 +17,20 @@
             <div class="hero-content">
                 <h1 class="hero-title">Complete Care for Your Car, Complete Control for Your Workshop.</h1>
                 <p class="hero-subtitle">From seamless booking to pickup & delivery tracking. The all-in-one platform for drivers and mechanics that modernizes auto repair.</p>
-                <div class="flex gap-2">
-                    <a href="login.php" class="btn btn-primary">Book a Service</a>
-                    <a href="careers.php" class="btn btn-secondary" style="background: #E2E8F0; color: #1E293B;">Partner with Us</a>
+                <div class="flex gap-4 flex-wrap">
+                    <!-- Customer Button -->
+                    <div class="flex flex-col gap-1">
+                        <a href="login.php" class="btn btn-primary">Book a Service</a>
+                        <span class="text-xs text-muted" style="padding-left: 0.5rem;">For Customers</span>
+                    </div>
+                    
+                    <!-- Career Button -->
+                    <div class="flex flex-col gap-1">
+                        <a href="careers.php" class="btn btn-secondary btn-icon" style="background: #E2E8F0; color: #1E293B;">
+                            <i class="fa-solid fa-briefcase"></i> Join Our Team
+                        </a>
+                        <span class="text-xs text-muted" style="padding-left: 0.5rem;">Mechanics & Drivers Apply Here</span>
+                    </div>
                 </div>
                 <div class="flex items-center gap-2 mt-4 text-sm text-primary font-medium">
                     <i class="fa-solid fa-circle-check"></i> Trusted by 500+ Local Workshops

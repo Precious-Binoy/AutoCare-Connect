@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed Search & Filter Test</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #1e293b;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .filters {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex: 1;
+        }
+
+        .search-bar {
+            position: relative;
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-bar i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        #resultsCounter {
+            color: #64748b;
+            font-size: 14px;
+            min-width: 140px;
+            font-weight: 500;
+        }
+
+        select {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th,
+        td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tbody tr {
+            transition: background 0.15s;
+        }
+
+        tbody tr:hover {
+            background: #f8fafc;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-in_progress {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-ready_for_delivery {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .badge-completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .text-primary {
+            color: #3b82f6;
+        }
+
+        .font-bold {
+            font-weight: 700;
+        }
+
+        .license-plate {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            color: #3b82f6;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .customer-name {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .vehicle-info {
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .test-instructions {
+            margin-top: 40px;
+            padding: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+        }
+
+        .test-instructions h3 {
+            margin-bottom: 16px;
+            font-size: 20px;
+        }
+
+        .test-instructions ol {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+
+        .test-instructions li {
+            margin-bottom: 8px;
+        }
+
+        .test-instructions strong {
+            color: #fef3c7;
+        }
+
+        .success-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 Search & Filter Test - FIXED VERSION</h1>
+        <p class="subtitle">Testing space-insensitive license plate search</p>
+
+        <div class="filters">
+            <div class="search-group">
+                <div class="search-bar">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="searchInput"
+                        placeholder="Search by License Plate, Customer, or Booking ID...">
+                </div>
+                <div id="resultsCounter"></div>
+            </div>
+            <select id="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="ready_for_delivery">Ready for Delivery</option>
+                <option value="completed">Completed</option>
+            </select>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Booking ID</th>
+                    <th>Customer & Vehicle</th>
+                    <th>Service</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-status="pending">
+                    <td><strong>#BK-12345</strong></td>
+                    <td data-customer="John Doe" data-vehicle="Toyota Camry" data-plate="ABC123">
+                        <div class="customer-name">John Doe</div>
+                        <div class="vehicle-info">Toyota Camry</div>
+                        <div class="license-plate">ABC123</div>
+                    </td>
+                    <td>Oil Change</td>
+                    <td><span class="badge badge-pending">PENDING</span></td>
+                </tr>
+                <tr data-status="in_progress">
+                    <td><strong>#BK-67890</strong></td>
+                    <td data-customer="Jane Smith" data-vehicle="Honda Civic" data-plate="KL 123 H 456">
+                        <div class="customer-name">Jane Smith</div>
+                        <div class="vehicle-info">Honda Civic</div>
+                        <div class="license-plate">KL 123 H 456</div>
+                    </td>
+                    <td>Brake Repair</td>
+                    <td><span class="badge badge-in_progress">IN PROGRESS</span></td>
+                </tr>
+                <tr data-status="ready_for_delivery">
+                    <td><strong>#BK-11111</strong></td>
+                    <td data-customer="Bob Johnson" data-vehicle="Ford F-150" data-plate="DEF456">
+                        <div class="customer-name">Bob Johnson</div>
+                        <div class="vehicle-info">Ford F-150</div>
+                        <div class="license-plate">DEF456</div>
+                    </td>
+                    <td>Tire Rotation</td>
+                    <td><span class="badge badge-ready_for_delivery">READY FOR DELIVERY</span></td>
+                </tr>
+                <tr data-status="completed">
+                    <td><strong>#BK-22222</strong></td>
+                    <td data-customer="Alice Williams" data-vehicle="Tesla Model 3" data-plate="XYZ 999">
+                        <div class="customer-name">Alice Williams</div>
+                        <div class="vehicle-info">Tesla Model 3</div>
+                        <div class="license-plate">XYZ 999</div>
+                    </td>
+                    <td>Battery Check</td>
+                    <td><span class="badge badge-completed">COMPLETED</span></td>
+                </tr>
+                <tr data-status="pending">
+                    <td><strong>#BK-33333</strong></td>
+                    <td data-customer="Charlie Brown" data-vehicle="BMW X5" data-plate="GHI789">
+                        <div class="customer-name">Charlie Brown</div>
+                        <div class="vehicle-info">BMW X5</div>
+                        <div class="license-plate">GHI789</div>
+                    </td>
+                    <td>Engine Diagnostic</td>
+                    <td><span class="badge badge-pending">PENDING</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="test-instructions">
+            <h3>✅ Test Instructions - Space-Insensitive Search</h3>
+            <ol>
+                <li><strong>Test 1:</strong> Type "kl 123 h 456" → Should show Jane Smith <span class="success-badge">✓
+                        FIXED</span></li>
+                <li><strong>Test 2:</strong> Type "kl123h456" (no spaces) → Should STILL show Jane Smith <span
+                        class="success-badge">✓ FIXED</span></li>
+                <li><strong>Test 3:</strong> Type "kl 123 h456" (partial spaces) → Should STILL show Jane Smith <span
+                        class="success-badge">✓ FIXED</span></li>
+                <li><strong>Test 4:</strong> Type "xyz999" → Should show Alice Williams (spaces removed from "XYZ 999")
+                </li>
+                <li><strong>Test 5:</strong> Select "Pending" filter → Should show John Doe and Charlie Brown</li>
+                <li><strong>Test 6:</strong> Type "abc" + Select "Pending" → Should show only John Doe</li>
+                <li><strong>Test 7:</strong> Clear all → Should show all 5 rows, counter disappears</li>
+            </ol>
+            <p style="margin-top: 20px; font-size: 14px; opacity: 0.9;">
+                <strong>🎯 Key Fix:</strong> The search now removes all spaces from both the search term and license
+                plates before comparing,
+                so "KL 123 H 456", "kl123h456", and "kl 123 h456" all match correctly!
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Combined Search and Filter functionality - FIXED VERSION
+        document.addEventListener('DOMContentLoaded', function () {
+            const searchInput = document.getElementById('searchInput');
+            const statusFilter = document.getElementById('statusFilter');
+            const resultsCounter = document.getElementById('resultsCounter');
+
+            // Function to apply both search and filter
+            function applyFilters() {
+                const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+                const selectedStatus = statusFilter ? statusFilter.value.toLowerCase() : '';
+
+                // Remove spaces from search term for license plate matching
+                const searchTermNoSpaces = searchTerm.replace(/\s+/g, '');
+
+                // Get all table rows
+                const allRows = document.querySelectorAll('table tbody tr');
+                let visibleCount = 0;
+
+                allRows.forEach(row => {
+                    // Get row status
+                    const rowStatus = (row.getAttribute('data-status') || '').toLowerCase();
+
+                    // Check status filter
+                    const statusMatches = selectedStatus === '' || rowStatus === selectedStatus;
+
+                    // Get booking ID from first column
+                    const bookingIdCell = row.querySelector('td:first-child');
+                    const bookingId = bookingIdCell ? bookingIdCell.textContent.toLowerCase() : '';
+
+                    // Get customer/vehicle cell
+                    const customerCell = row.querySelector('td[data-customer]');
+
+                    let customerName = '';
+                    let vehicle = '';
+                    let licensePlate = '';
+                    let licensePlateNoSpaces = '';
+
+                    if (customerCell) {
+                        customerName = (customerCell.getAttribute('data-customer') || '').toLowerCase();
+                        vehicle = (customerCell.getAttribute('data-vehicle') || '').toLowerCase();
+                        licensePlate = (customerCell.getAttribute('data-plate') || '').toLowerCase();
+                        // Remove spaces from license plate for matching
+                        licensePlateNoSpaces = licensePlate.replace(/\s+/g, '');
+                    }
+
+                    // Check if search term matches any field (or if search is empty)
+                    // For license plate, check both with and without spaces
+                    const searchMatches = searchTerm === '' ||
+                        bookingId.includes(searchTerm) ||
+                        customerName.includes(searchTerm) ||
+                        vehicle.includes(searchTerm) ||
+                        licensePlate.includes(searchTerm) ||
+                        licensePlateNoSpaces.includes(searchTermNoSpaces);
+
+                    // Show row only if both search and status filter match
+                    const shouldShow = searchMatches && statusMatches;
+                    row.style.display = shouldShow ? '' : 'none';
+
+                    if (shouldShow) {
+                        visibleCount++;
+                    }
+                });
+
+                // Update results counter
+                if (resultsCounter) {
+                    if (searchTerm || selectedStatus) {
+                        resultsCounter.innerHTML = `<i class="fa-solid fa-filter text-primary"></i> <span class="font-bold">${visibleCount}</span> result${visibleCount !== 1 ? 's' : ''} found`;
+                    } else {
+                        resultsCounter.innerHTML = '';
+                    }
+                }
+            }
+
+            // Add event listeners
+            if (searchInput) {
+                searchInput.addEventListener('input', applyFilters);
+            }
+
+            if (statusFilter) {
+                statusFilter.addEventListener('change', applyFilters);
+            }
+        });
+    </script>
+</body>
+
+</html>

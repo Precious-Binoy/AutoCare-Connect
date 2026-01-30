@@ -189,20 +189,52 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                             $bStatus = $booking['status'];
                             $activeIndex = 0;
                             
+                            // Explicitly find pickup and delivery tasks from the $drivers array (if any)
+                            $pickupTask = null;
+                            $deliveryTask = null;
+                            foreach ($drivers as $d) {
+                                if ($d['type'] == 'pickup') $pickupTask = $d;
+                                if ($d['type'] == 'delivery') $deliveryTask = $d;
+                            }
+                            
                             if ($hasPickupDelivery) {
-                                // Pickup/Delivery Flow: Booked → Pickup → Repair → Delivery → Done
-                                if ($bStatus == 'confirmed') $activeIndex = 1;
-                                if ($activeDriver && $activeDriver['type'] == 'pickup' && $activeDriver['status'] != 'completed') $activeIndex = 1;
-                                if ($bStatus == 'in_progress') $activeIndex = 2;
-                                if ($bStatus == 'ready_for_delivery') $activeIndex = 3;
-                                if ($activeDriver && $activeDriver['type'] == 'delivery' && $activeDriver['status'] != 'completed') $activeIndex = 3;
-                                if ($bStatus == 'delivered' || $bStatus == 'completed') $activeIndex = 4;
+                                // Pickup/Delivery Flow: Booked (0) → Pickup (1) → Repair (2) → Delivery (3) → Done (4)
+                                
+                                // Base status mapping
+                                if ($bStatus == 'pending') {
+                                    $activeIndex = 0;
+                                } elseif ($bStatus == 'confirmed') {
+                                    $activeIndex = 1; 
+                                } elseif ($bStatus == 'in_progress') {
+                                    $activeIndex = 2;
+                                } elseif ($bStatus == 'ready_for_delivery') {
+                                    $activeIndex = 3;
+                                } elseif ($bStatus == 'completed' || $bStatus == 'delivered') {
+                                    $activeIndex = 4;
+                                }
+                                
+                                // Refinements based on driver sub-tasks
+                                // If pickup is done but status hasn't moved to in_progress yet, it's technically waiting at service center (Step 1 complete -> transitioning to 2)
+                                // But simpler to stick to main status for the big steps.
+                                
+                                // If delivery driver is assigned/en-route, definitely Step 3 or higher
+                                if ($deliveryTask && ($deliveryTask['status'] == 'in_transit' || $deliveryTask['status'] == 'completed') && $activeIndex < 3) {
+                                    $activeIndex = 3;
+                                }
+                                
                             } else {
-                                // Self-Pickup Flow: Booked → Arrived → Repair → Ready → Collected
-                                if ($bStatus == 'confirmed') $activeIndex = 1;
-                                if ($bStatus == 'in_progress') $activeIndex = 2;
-                                if ($bStatus == 'completed' || $bStatus == 'ready_for_delivery') $activeIndex = 3;
-                                if ($bStatus == 'delivered') $activeIndex = 4;
+                                // Self-Drop Flow: Booked (0) → Arrived (1) → Repair (2) → Ready (3) → Collected (4)
+                                if ($bStatus == 'pending') {
+                                    $activeIndex = 0;
+                                } elseif ($bStatus == 'confirmed') {
+                                    $activeIndex = 1;
+                                } elseif ($bStatus == 'in_progress') {
+                                    $activeIndex = 2;
+                                } elseif ($bStatus == 'ready_for_delivery') {
+                                    $activeIndex = 3;
+                                } elseif ($bStatus == 'completed' || $bStatus == 'delivered') {
+                                    $activeIndex = 4;
+                                }
                             }
 
                             $progressWidth = ($activeIndex / 4) * 100 . '%';

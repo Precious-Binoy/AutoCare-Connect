@@ -183,7 +183,7 @@ $page_title = 'Book Service';
 
                                 <div class="form-group flex flex-col gap-2">
                                     <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Preferred Service Date</label>
-                                    <input type="date" name="preferred_date" class="form-control h-16 px-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all" required>
+                                    <input type="date" name="preferred_date" id="preferredDateInput" class="form-control h-16 px-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all" min="<?php echo date('Y-m-d'); ?>" required>
                                 </div>
                             </div>
                         </div>
@@ -204,132 +204,237 @@ $page_title = 'Book Service';
                         </div>
                     </section>
 
-                    <!-- Logistics Option: Refined Style -->
-                    <!-- Logistics Option: Final Streamlined Design -->
-                    <section class="mt-16">
-                        <div class="card p-0 shadow-2xl shadow-gray-200/50 rounded-[2.5rem] border border-gray-100 bg-white overflow-hidden">
-                            <!-- Section Header -->
-                            <div class="px-12 py-10 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
-                                <div class="flex items-center gap-5">
-                                    <div class="w-14 h-14 bg-primary/10 text-primary rounded-2xl flex items-center justify-center text-2xl shadow-inner">
-                                        <i class="fa-solid fa-truck-pickup"></i>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-3xl font-black text-gray-900 tracking-tight">4. Valet Pickup & Delivery</h2>
-                                        <p class="text-xs font-bold text-muted uppercase tracking-[0.2em] mt-1">Premium Doorstep Service</p>
-                                    </div>
+                    <!-- Valet Pickup & Delivery - Modern Design -->
+                    <section class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                        <div>
+                            <h2 class="text-xl font-black text-gray-800 flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                                    <i class="fa-solid fa-truck-pickup"></i>
                                 </div>
-                                
-                                <div class="flex items-center gap-4 bg-white px-6 py-3 rounded-2xl shadow-sm border border-gray-100 transition-all hover:bg-slate-50 group">
-                                    <span class="text-xs font-black uppercase tracking-widest text-slate-400 group-hover:text-primary transition-colors" id="logisticsStatusText">Enable Service?</span>
-                                    <label class="premium-switch small-blue">
+                                4. Valet Pickup & Delivery
+                            </h2>
+                            <div class="card p-8 space-y-6 shadow-xl shadow-gray-100/50">
+                                <!-- Enable Toggle -->
+                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fa-solid fa-truck text-primary text-xl"></i>
+                                        <div>
+                                            <p class="font-bold text-gray-900">Enable Doorstep Service</p>
+                                            <p class="text-xs text-muted">We'll pick up and deliver your vehicle</p>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch">
                                         <input type="checkbox" name="request_pickup" value="1" id="pickupToggle">
-                                        <span class="premium-slider"></span>
+                                        <span class="toggle-slider"></span>
                                     </label>
                                 </div>
-                            </div>
 
-                            <!-- Valet Details Content -->
-                            <div id="pickupDetails" class="hidden animate-fade-in">
-                                <div class="p-12 space-y-12">
-                                    <!-- Input Grid -->
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
-                                        <!-- Contact Phone -->
-                                        <div class="space-y-4">
-                                            <label class="text-xs font-black uppercase text-gray-400 tracking-[0.2em] ml-1 flex items-center gap-2">
-                                                <i class="fa-solid fa-phone text-primary/60"></i> Contact Phone
-                                            </label>
-                                            <input type="tel" name="pickup_phone" value="<?php echo htmlspecialchars($_SESSION['user_phone'] ?? ''); ?>" 
-                                                   class="form-control h-20 px-8 font-bold text-lg rounded-3xl bg-gray-50 border-gray-100 focus:bg-white focus:ring-8 focus:ring-primary/5 transition-all w-full" 
-                                                   placeholder="Mobile Number">
-                                        </div>
-
-                                        <!-- Address Search -->
-                                        <div class="space-y-4">
-                                            <label class="text-xs font-black uppercase text-gray-400 tracking-[0.2em] ml-1 flex items-center gap-2">
-                                                <i class="fa-solid fa-location-dot text-primary/60"></i> Pickup Address (Words)
-                                            </label>
-                                            <div class="relative group">
-                                                <input type="text" name="pickup_address" id="pickupAddressInput" 
-                                                       class="form-control h-20 pl-8 pr-16 font-bold text-lg rounded-3xl bg-gray-50 border-gray-100 focus:bg-white focus:ring-8 focus:ring-primary/5 transition-all w-full" 
-                                                       placeholder="Enter location or pick on map">
-                                                <button type="button" id="usePickupLocationBtn" 
-                                                        class="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white shadow-md border border-gray-100 text-primary hover:bg-primary hover:text-white rounded-2xl transition-all flex items-center justify-center">
-                                                    <i class="fa-solid fa-crosshairs shadow-sm"></i>
-                                                </button>
-                                            </div>
-                                            <input type="hidden" name="pickup_lat" id="pickupLat">
-                                            <input type="hidden" name="pickup_lng" id="pickupLng">
-                                        </div>
-
-                                        <!-- Landmark -->
-                                        <div class="space-y-4">
-                                            <label class="text-xs font-black uppercase text-gray-400 tracking-[0.2em] ml-1 flex items-center gap-2">
-                                                <i class="fa-solid fa-building text-primary/60"></i> Landmark / Building
-                                            </label>
-                                            <input type="text" name="pickup_landmark" 
-                                                   class="form-control h-20 px-8 font-bold text-lg rounded-3xl bg-gray-50 border-gray-100 focus:bg-white focus:ring-8 focus:ring-primary/5 transition-all w-full" 
-                                                   placeholder="e.g. Near St. Mary's Church">
-                                        </div>
-
-                                        <!-- Parking Info -->
-                                        <div class="space-y-4">
-                                            <label class="text-xs font-black uppercase text-gray-400 tracking-[0.2em] ml-1 flex items-center gap-2">
-                                                <i class="fa-solid fa-key text-primary/60"></i> Key Placement & Parking
-                                            </label>
-                                            <input type="text" name="pickup_parking" 
-                                                   class="form-control h-20 px-8 font-bold text-lg rounded-3xl bg-gray-50 border-gray-100 focus:bg-white focus:ring-8 focus:ring-primary/5 transition-all w-full" 
-                                                   placeholder="e.g. Key with security, Plot 12">
+                                <!-- Pickup Details -->
+                                <div id="pickupDetails" class="hidden space-y-6 animate-fade-in">
+                                    <!-- Contact Phone -->
+                                    <div class="form-group flex flex-col gap-2">
+                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Contact Phone</label>
+                                        <div class="relative">
+                                            <i class="fa-solid fa-phone absolute left-6 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                            <input type="tel" 
+                                                   name="pickup_phone" 
+                                                   value="<?php echo htmlspecialchars($_SESSION['user_phone'] ?? ''); ?>" 
+                                                   class="form-control h-16 pl-14 pr-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
+                                                   placeholder="Mobile Number"
+                                                   pattern="[0-9]{10}"
+                                                   maxlength="10">
                                         </div>
                                     </div>
 
-                                    <!-- Map Area -->
-                                    <div class="space-y-6 pt-4">
-                                        <div class="flex items-center justify-between px-2">
-                                            <label class="text-xs font-black uppercase text-gray-400 tracking-[0.2em] flex items-center gap-3">
-                                                <i class="fa-solid fa-map text-primary/60"></i> Confirm Exact Location on Map
-                                            </label>
-                                            <div class="flex items-center gap-2">
-                                                <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-                                                <span class="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-3 py-1.5 rounded-full">Draggable Marker</span>
-                                            </div>
+                                    <!-- Address Input -->
+                                    <div class="form-group flex flex-col gap-2">
+                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Pickup Address</label>
+                                        <div class="relative">
+                                            <i class="fa-solid fa-location-dot absolute left-6 top-6 text-gray-400"></i>
+                                            <textarea name="pickup_address" 
+                                                      id="pickupAddressInput" 
+                                                      rows="3"
+                                                      class="form-control pl-14 pr-6 pt-5 text-base font-semibold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full resize-none" 
+                                                      placeholder="House No., Building Name, Street, Area"></textarea>
                                         </div>
-                                        <div class="h-[450px] rounded-[3rem] overflow-hidden border-4 border-gray-50 shadow-2xl relative group ring-1 ring-gray-100">
-                                            <div id="pickupMap" class="w-full h-full bg-slate-50"></div>
-                                            <div class="absolute inset-0 flex items-center justify-center bg-white/95 backdrop-blur-md transition-all duration-700 pointer-events-none" id="mapLoader">
-                                                <div class="flex flex-col items-center gap-6">
-                                                    <div class="w-16 h-16 border-[6px] border-primary/20 border-t-primary rounded-full animate-spin"></div>
-                                                    <span class="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Preparing Map View</span>
+                                        <input type="hidden" name="pickup_lat" id="pickupLat">
+                                        <input type="hidden" name="pickup_lng" id="pickupLng">
+                                        
+                                        <!-- Beautiful Colorful Buttons -->
+                                        <div class="grid grid-cols-2 gap-4 mt-4">
+                                            <!-- Current Location Button - Blue/Cyan Gradient -->
+                                            <button type="button" 
+                                                    id="useCurrentLocationBtn" 
+                                                    class="group relative px-6 py-5 bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600 text-white rounded-2xl font-bold shadow-[0_8px_0_0_rgb(30,64,175),0_10px_20px_0_rgba(59,130,246,0.5)] hover:shadow-[0_4px_0_0_rgb(30,64,175),0_6px_15px_0_rgba(59,130,246,0.6)] active:shadow-[0_0_0_0_rgb(30,64,175),0_2px_8px_0_rgba(59,130,246,0.4)] hover:translate-y-[4px] active:translate-y-[8px] transition-all duration-200 flex flex-col items-center justify-center gap-2 border-b-4 border-blue-900 overflow-hidden">
+                                                <!-- Shine effect -->
+                                                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                                                <!-- Icon -->
+                                                <div class="relative z-10 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                                                    <i class="fa-solid fa-location-crosshairs text-2xl"></i>
                                                 </div>
-                                            </div>
+                                                <!-- Text -->
+                                                <span class="relative z-10 text-sm">Use Current Location</span>
+                                            </button>
+                                            
+                                            <!-- Choose from Map Button - Green/Emerald Gradient -->
+                                            <button type="button" 
+                                                    id="openMapBtn" 
+                                                    class="group relative px-6 py-5 bg-gradient-to-br from-emerald-400 via-green-500 to-green-600 text-white rounded-2xl font-bold shadow-[0_8px_0_0_rgb(21,128,61),0_10px_20px_0_rgba(34,197,94,0.5)] hover:shadow-[0_4px_0_0_rgb(21,128,61),0_6px_15px_0_rgba(34,197,94,0.6)] active:shadow-[0_0_0_0_rgb(21,128,61),0_2px_8px_0_rgba(34,197,94,0.4)] hover:translate-y-[4px] active:translate-y-[8px] transition-all duration-200 flex flex-col items-center justify-center gap-2 border-b-4 border-green-900 overflow-hidden">
+                                                <!-- Shine effect -->
+                                                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                                                <!-- Icon -->
+                                                <div class="relative z-10 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                                                    <i class="fa-solid fa-map-marked-alt text-2xl"></i>
+                                                </div>
+                                                <!-- Text -->
+                                                <span class="relative z-10 text-sm">Choose from Map</span>
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <!-- Guidance Notes -->
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
-                                        <div class="p-6 bg-primary/5 rounded-[2rem] border border-primary/10 flex items-center gap-5 transition-transform hover:scale-[1.02]">
-                                            <div class="w-14 h-14 bg-white rounded-2xl shadow-md flex items-center justify-center text-primary text-xl">
-                                                <i class="fa-solid fa-rotate-left"></i>
-                                            </div>
-                                            <div>
-                                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Return Policy</p>
-                                                <p class="text-sm font-black text-primary uppercase leading-tight">Returned to original pickup location</p>
-                                            </div>
+                                    <!-- Landmark -->
+                                    <div class="form-group flex flex-col gap-2">
+                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Landmark (Optional)</label>
+                                        <div class="relative">
+                                            <i class="fa-solid fa-building absolute left-6 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                            <input type="text" 
+                                                   name="pickup_landmark" 
+                                                   class="form-control h-16 pl-14 pr-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
+                                                   placeholder="e.g., Near St. Mary's Church">
                                         </div>
-                                        <div class="p-6 bg-blue-500/5 rounded-[2rem] border border-blue-500/10 flex items-center gap-5 transition-transform hover:scale-[1.02]">
-                                            <div class="w-14 h-14 bg-white rounded-2xl shadow-md flex items-center justify-center text-blue-500 text-xl">
-                                                <i class="fa-solid fa-phone-volume"></i>
-                                            </div>
-                                            <div>
-                                                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Driver Contact</p>
-                                                <p class="text-sm font-black text-blue-600 uppercase leading-tight">Driver will call for pickup coordination</p>
-                                            </div>
+                                    </div>
+
+                                    <!-- Key Placement -->
+                                    <div class="form-group flex flex-col gap-2">
+                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Key Placement & Parking Info</label>
+                                        <div class="relative">
+                                            <i class="fa-solid fa-key absolute left-6 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                            <input type="text" 
+                                                   name="pickup_parking" 
+                                                   class="form-control h-16 pl-14 pr-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
+                                                   placeholder="e.g., Key with security, Plot 12">
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Info Section - Only show when enabled -->
+                        <div id="infoSection" class="hidden">
+                            <h2 class="text-xl font-black text-gray-800 flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                </div>
+                                Service Information
+                            </h2>
+                            <div class="card p-8 h-full shadow-xl shadow-gray-100/50 space-y-6">
+                                <!-- Info Cards -->
+                                <div class="space-y-4">
+                                    <div class="p-5 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-4">
+                                        <div class="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-truck-pickup"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-gray-900 mb-1">Free Pickup</p>
+                                            <p class="text-sm text-gray-600">Our driver will collect your vehicle from your doorstep at the scheduled time.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="p-5 bg-green-50 rounded-2xl border border-green-100 flex items-start gap-4">
+                                        <div class="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-rotate-left"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-gray-900 mb-1">Return to Same Location</p>
+                                            <p class="text-sm text-gray-600">Vehicle will be delivered back to your pickup address after service completion.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="p-5 bg-purple-50 rounded-2xl border border-purple-100 flex items-start gap-4">
+                                        <div class="w-10 h-10 bg-purple-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-phone-volume"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-gray-900 mb-1">Driver Coordination</p>
+                                            <p class="text-sm text-gray-600">Our driver will call you 30 minutes before arrival for coordination.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4">
+                                        <div class="w-10 h-10 bg-orange-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-shield-halved"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-gray-900 mb-1">Fully Insured</p>
+                                            <p class="text-sm text-gray-600">Your vehicle is covered under comprehensive insurance during transit.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-4">
+                                        <div class="w-10 h-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+                                            <i class="fa-solid fa-map-pin"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-gray-900 mb-1">Flexible Location</p>
+                                            <p class="text-sm text-gray-600">Set pickup location from anywhere - use your current location or choose from map.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Note -->
+                                <div class="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                    <p class="text-xs text-gray-600 leading-relaxed">
+                                        <i class="fa-solid fa-info-circle text-primary mr-1"></i>
+                                        <strong>Note:</strong> Please ensure someone is available at the pickup location to hand over the vehicle and keys to our driver.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </section>
+
+                    <!-- Map Modal - Fixed -->
+                    <div id="mapModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" style="display: none;">
+                        <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-fade-in">
+                            <!-- Modal Header -->
+                            <div class="px-8 py-6 bg-gradient-to-r from-purple-500 to-indigo-600 text-white flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                                        <i class="fa-solid fa-map-location-dot text-2xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-2xl font-bold">Choose Pickup Location</h3>
+                                        <p class="text-sm text-white/80">Click on map or drag marker to set exact location</p>
+                                    </div>
+                                </div>
+                                <button type="button" id="closeMapBtn" class="w-12 h-12 hover:bg-white/20 rounded-xl transition-all flex items-center justify-center">
+                                    <i class="fa-solid fa-times text-2xl"></i>
+                                </button>
+                            </div>
+
+                            <!-- Map Container -->
+                            <div class="relative h-[500px] bg-gray-100">
+                                <div id="pickupMap" class="w-full h-full"></div>
+                                <div id="mapLoader" class="absolute inset-0 flex items-center justify-center bg-white" style="display: flex;">
+                                    <div class="flex flex-col items-center gap-4">
+                                        <div class="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+                                        <span class="text-lg font-bold text-gray-700">Loading Map...</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modal Footer -->
+                            <div class="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span>
+                                    <span id="mapCoordinates" class="text-sm font-semibold text-gray-700">Click map to select location</span>
+                                </div>
+                                <button type="button" id="confirmLocationBtn" class="px-8 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all">
+                                    <i class="fa-solid fa-check mr-2"></i>
+                                    Confirm Location
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="flex justify-center gap-6 pt-10">
                         <button type="submit" class="btn btn-primary h-20 px-24 text-2xl font-black rounded-3xl shadow-2xl shadow-blue-100 transition-all hover:scale-105 active:scale-95 flex items-center gap-4">
@@ -342,17 +447,47 @@ $page_title = 'Book Service';
     </div>
 
     <style>
-        .premium-switch { position: relative; display: inline-block; width: 64px; height: 36px; }
-        .premium-switch input { opacity: 0; width: 0; height: 0; }
-        .premium-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.2); transition: .4s; border-radius: 36px; }
-        .premium-slider:before { position: absolute; content: ""; height: 28px; width: 28px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        input:checked + .premium-slider { background-color: #4ade80; }
-        .small-blue input:checked + .premium-slider { background-color: #3b82f6; }
-        input:checked + .premium-slider:before { transform: translateX(28px); }
-        .small-blue input:checked + .premium-slider:before { transform: translateX(20px); }
-        
-        .small-blue.premium-switch { width: 48px; height: 28px; }
-        .small-blue .premium-slider:before { height: 20px; width: 20px; }
+        /* Modern Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 52px;
+            height: 28px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e5e7eb;
+            transition: .3s;
+            border-radius: 28px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input:checked + .toggle-slider {
+            background-color: #3b82f6;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
         
         .h-20 { height: 5rem; }
     </style>
@@ -389,142 +524,320 @@ $page_title = 'Book Service';
                 }
             };
 
-            // 2. Streamlined Logistics Logic (Leaflet Integration)
-            let valetMap, valetMarker;
-            const valetToggle = document.getElementById('pickupToggle');
-            const valetDetails = document.getElementById('pickupDetails');
-            const statusText = document.getElementById('logisticsStatusText');
-            const addrInput = document.getElementById('pickupAddressInput');
+            // 2. Valet Pickup & Delivery - Modern Design with Working Modal
+            let pickupMap, pickupMarker;
+            const pickupToggle = document.getElementById('pickupToggle');
+            const pickupDetails = document.getElementById('pickupDetails');
+            const infoSection = document.getElementById('infoSection');
+            const addressInput = document.getElementById('pickupAddressInput');
             const latInput = document.getElementById('pickupLat');
             const lngInput = document.getElementById('pickupLng');
+            const mapModal = document.getElementById('mapModal');
             const mapLoader = document.getElementById('mapLoader');
+            const openMapBtn = document.getElementById('openMapBtn');
+            const closeMapBtn = document.getElementById('closeMapBtn');
+            const confirmLocationBtn = document.getElementById('confirmLocationBtn');
+            const useLocationBtn = document.getElementById('useCurrentLocationBtn');
+            const mapCoordinates = document.getElementById('mapCoordinates');
 
-            valetToggle.addEventListener('change', function() {
+            // Toggle pickup details and info section visibility
+            pickupToggle.addEventListener('change', function() {
                 if (this.checked) {
-                    valetDetails.classList.remove('hidden');
-                    statusText.innerText = 'Service Enabled';
-                    statusText.classList.add('text-blue-500');
-                    initValetMap();
+                    pickupDetails.classList.remove('hidden');
+                    infoSection.classList.remove('hidden');
                 } else {
-                    valetDetails.classList.add('hidden');
-                    statusText.innerText = 'Enable Valet?';
-                    statusText.classList.remove('text-blue-500');
+                    pickupDetails.classList.add('hidden');
+                    infoSection.classList.add('hidden');
                 }
             });
 
-            function initValetMap() {
-                if (!valetMap) {
+            // Open map modal - FIXED WITH ERROR HANDLING
+            openMapBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('🗺️ Button clicked - Opening map modal...');
+                
+                // Check if Leaflet is loaded
+                if (typeof L === 'undefined') {
+                    alert('Map library is loading... Please wait a moment and try again.');
+                    console.error('❌ Leaflet not loaded!');
+                    return;
+                }
+                
+                // Show loading state on button
+                const originalHTML = this.innerHTML;
+                this.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-2xl"></i><span class="text-sm mt-2">Opening Map...</span>';
+                this.disabled = true;
+                
+                try {
+                    // Force display with multiple methods
+                    mapModal.style.display = 'flex';
+                    mapModal.style.visibility = 'visible';
+                    mapModal.style.opacity = '1';
+                    mapModal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                    
+                    console.log('✅ Modal display set to flex');
+                    console.log('Modal element:', mapModal);
+                    
+                    // Initialize map after a short delay
                     setTimeout(() => {
-                        valetMap = L.map('pickupMap', {
-                            scrollWheelZoom: false,
-                            zoomControl: true
+                        try {
+                            initializeMap();
+                            // Restore button
+                            openMapBtn.innerHTML = originalHTML;
+                            openMapBtn.disabled = false;
+                        } catch (error) {
+                            console.error('❌ Map initialization error:', error);
+                            alert('Error loading map. Please refresh the page and try again.');
+                            mapModal.style.display = 'none';
+                            openMapBtn.innerHTML = originalHTML;
+                            openMapBtn.disabled = false;
+                        }
+                    }, 300);
+                } catch (error) {
+                    console.error('❌ Error opening modal:', error);
+                    alert('Error opening map. Please try again.');
+                    this.innerHTML = originalHTML;
+                    this.disabled = false;
+                }
+            });
+
+            // Close map modal
+            closeMapBtn.addEventListener('click', function() {
+                mapModal.style.display = 'none';
+                mapModal.classList.add('hidden');
+                document.body.style.overflow = ''; // Restore scroll
+            });
+
+            // Close modal on backdrop click
+            mapModal.addEventListener('click', function(e) {
+                if (e.target === mapModal) {
+                    mapModal.style.display = 'none';
+                    mapModal.classList.add('hidden');
+                    document.body.style.overflow = '';
+                }
+            });
+
+            // Confirm location and close modal
+            confirmLocationBtn.addEventListener('click', function() {
+                if (latInput.value && lngInput.value) {
+                    mapModal.style.display = 'none';
+                    mapModal.classList.add('hidden');
+                    document.body.style.overflow = '';
+                } else {
+                    alert('Please select a location on the map');
+                }
+            });
+
+            // Initialize Leaflet Map
+            function initializeMap() {
+                if (!pickupMap) {
+                    console.log('Initializing map...');
+                    setTimeout(() => {
+                        // Create map
+                        pickupMap = L.map('pickupMap', {
+                            scrollWheelZoom: true,
+                            zoomControl: true,
+                            dragging: true,
+                            touchZoom: true,
+                            doubleClickZoom: true
                         }).setView([10.8505, 76.2711], 13);
                         
+                        // Add tiles
                         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            attribution: '© OpenStreetMap contributors'
-                        }).addTo(valetMap);
+                            attribution: '© OpenStreetMap',
+                            maxZoom: 19
+                        }).addTo(pickupMap);
                         
-                        valetMap.on('click', (e) => updateValetLocation(e.latlng.lat, e.latlng.lng));
+                        // Click event
+                        pickupMap.on('click', function(e) {
+                            updateLocation(e.latlng.lat, e.latlng.lng);
+                        });
                         
-                        valetMap.whenReady(() => {
+                        // Hide loader
+                        pickupMap.whenReady(() => {
                             setTimeout(() => {
-                                mapLoader.classList.add('opacity-0');
-                                setTimeout(() => mapLoader.classList.add('hidden'), 700);
-                                valetMap.invalidateSize();
+                                mapLoader.style.display = 'none';
+                                pickupMap.invalidateSize();
+                                console.log('Map ready!');
                             }, 500);
                         });
 
-                        if (navigator.geolocation && !latInput.value) {
-                            navigator.geolocation.getCurrentPosition((pos) => {
-                                updateValetLocation(pos.coords.latitude, pos.coords.longitude);
-                            }, null, { enableHighAccuracy: true });
+                        // Load existing location if available
+                        if (latInput.value && lngInput.value) {
+                            updateLocation(parseFloat(latInput.value), parseFloat(lngInput.value), false);
+                        } else if (navigator.geolocation) {
+                            // Get current location
+                            navigator.geolocation.getCurrentPosition(
+                                (position) => {
+                                    updateLocation(position.coords.latitude, position.coords.longitude);
+                                },
+                                (error) => {
+                                    console.log('Geolocation error:', error);
+                                },
+                                { enableHighAccuracy: true, timeout: 5000 }
+                            );
                         }
                     }, 300);
                 } else {
                     setTimeout(() => {
-                        valetMap.invalidateSize();
-                        if (valetMarker) valetMap.setView(valetMarker.getLatLng(), 16);
+                        pickupMap.invalidateSize();
+                        if (pickupMarker) {
+                            pickupMap.setView(pickupMarker.getLatLng(), 16);
+                        }
                     }, 400);
                 }
             }
 
-            window.updateValetLocation = function(lat, lng, syncInput = true) {
-                if (!valetMap) return;
+            // Update location
+            function updateLocation(lat, lng, reverseGeocode = true) {
+                if (!pickupMap) return;
 
                 const latlng = [lat, lng];
-                if (!valetMarker) {
-                    valetMarker = L.marker(latlng, { draggable: true }).addTo(valetMap);
-                    valetMarker.on('dragend', (e) => {
+                
+                // Create or update marker
+                if (!pickupMarker) {
+                    pickupMarker = L.marker(latlng, { 
+                        draggable: true,
+                        title: 'Drag to adjust'
+                    }).addTo(pickupMap);
+                    
+                    // Drag event
+                    pickupMarker.on('dragend', function(e) {
                         const pos = e.target.getLatLng();
-                        updateValetLocation(pos.lat, pos.lng);
+                        updateLocation(pos.lat, pos.lng);
                     });
                 } else {
-                    valetMarker.setLatLng(latlng);
+                    pickupMarker.setLatLng(latlng);
                 }
 
-                valetMap.setView(latlng, 16);
-                latInput.value = lat;
-                lngInput.value = lng;
+                // Center map
+                pickupMap.setView(latlng, 16);
+                
+                // Update hidden inputs
+                latInput.value = lat.toFixed(6);
+                lngInput.value = lng.toFixed(6);
 
-                if (syncInput) {
-                    addrInput.value = "📍 Locating Address...";
+                // Update coordinates display
+                mapCoordinates.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+                // Reverse geocode to get readable address
+                if (reverseGeocode) {
+                    addressInput.value = "📍 Getting address...";
                     
-                    // Robust Reverse Geocoding
-                    fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
-                        headers: {
-                            'Accept-Language': 'en-US,en;q=0.9'
-                        }
+                    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
+                        headers: { 'Accept-Language': 'en-US,en;q=0.9' }
                     })
-                    .then(r => r.json())
+                    .then(response => response.json())
                     .then(data => {
-                        if (data && data.display_name) {
-                            // Extract a more human-readable address if possible
-                            const addr = data.display_name;
-                            addrInput.value = addr;
+                        if (data && data.address) {
+                            // Extract readable address components
+                            const addr = data.address;
+                            let addressParts = [];
+                            
+                            // Build readable address
+                            if (addr.house_number) addressParts.push(addr.house_number);
+                            if (addr.road) addressParts.push(addr.road);
+                            else if (addr.pedestrian) addressParts.push(addr.pedestrian);
+                            
+                            if (addr.neighbourhood) addressParts.push(addr.neighbourhood);
+                            else if (addr.suburb) addressParts.push(addr.suburb);
+                            
+                            if (addr.city) addressParts.push(addr.city);
+                            else if (addr.town) addressParts.push(addr.town);
+                            else if (addr.village) addressParts.push(addr.village);
+                            
+                            if (addr.state) addressParts.push(addr.state);
+                            if (addr.postcode) addressParts.push(addr.postcode);
+                            
+                            const readableAddress = addressParts.length > 0 ? addressParts.join(', ') : data.display_name;
+                            addressInput.value = readableAddress;
+                        } else if (data && data.display_name) {
+                            addressInput.value = data.display_name;
                         } else {
-                            addrInput.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                            addressInput.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
                         }
                     })
-                    .catch(err => {
-                        console.error('Geocoding error:', err);
-                        addrInput.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                    .catch(error => {
+                        console.error('Geocoding error:', error);
+                        addressInput.value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
                     });
                 }
-            };
+            }
 
-            // Search functionality
-            addrInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const query = addrInput.value;
-                    if (!query || query === "Detecting address...") return;
-
-                    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
-                        .then(r => r.json())
-                        .then(data => {
-                            if (data && data.length > 0) {
-                                updateValetLocation(data[0].lat, data[0].lon, false);
-                                latInput.value = data[0].lat;
-                                lngInput.value = data[0].lon;
-                            } else {
-                                alert("Location not found. Please try picking on map.");
-                            }
-                        });
-                }
-            });
-
-            // "My Location" Button
-            document.getElementById('usePickupLocationBtn').addEventListener('click', () => {
+            // Use current location button
+            useLocationBtn.addEventListener('click', function(e) {
+                e.preventDefault();
                 if (navigator.geolocation) {
-                    const btn = document.getElementById('usePickupLocationBtn');
-                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-                    navigator.geolocation.getCurrentPosition((pos) => {
-                        btn.innerHTML = '<i class="fa-solid fa-crosshairs"></i>';
-                        updateValetLocation(pos.coords.latitude, pos.coords.longitude);
-                    }, () => {
-                        btn.innerHTML = '<i class="fa-solid fa-crosshairs"></i>';
-                        alert("Geolocation failed.");
-                    });
+                    const btn = this;
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-lg relative z-10"></i><span class="relative z-10">Getting...</span>';
+                    btn.disabled = true;
+                    
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            btn.innerHTML = originalHTML;
+                            btn.disabled = false;
+                            
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            
+                            // Update hidden inputs
+                            latInput.value = lat.toFixed(6);
+                            lngInput.value = lng.toFixed(6);
+                            
+                            // Reverse geocode to get readable address
+                            addressInput.value = "📍 Getting address...";
+                            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`, {
+                                headers: { 'Accept-Language': 'en-US,en;q=0.9' }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data && data.address) {
+                                    // Extract readable address components
+                                    const addr = data.address;
+                                    let addressParts = [];
+                                    
+                                    // Build readable address
+                                    if (addr.house_number) addressParts.push(addr.house_number);
+                                    if (addr.road) addressParts.push(addr.road);
+                                    else if (addr.pedestrian) addressParts.push(addr.pedestrian);
+                                    
+                                    if (addr.neighbourhood) addressParts.push(addr.neighbourhood);
+                                    else if (addr.suburb) addressParts.push(addr.suburb);
+                                    
+                                    if (addr.city) addressParts.push(addr.city);
+                                    else if (addr.town) addressParts.push(addr.town);
+                                    else if (addr.village) addressParts.push(addr.village);
+                                    
+                                    if (addr.state) addressParts.push(addr.state);
+                                    if (addr.postcode) addressParts.push(addr.postcode);
+                                    
+                                    const readableAddress = addressParts.length > 0 ? addressParts.join(', ') : data.display_name;
+                                    addressInput.value = readableAddress;
+                                } else if (data && data.display_name) {
+                                    addressInput.value = data.display_name;
+                                } else {
+                                    addressInput.value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Geocoding error:', error);
+                                addressInput.value = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+                            });
+                        },
+                        (error) => {
+                            btn.innerHTML = originalHTML;
+                            btn.disabled = false;
+                            alert("Unable to get your location. Please enable location services or choose from map.");
+                            console.error('Geolocation error:', error);
+                        },
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                } else {
+                    alert("Geolocation is not supported by your browser. Please choose from map.");
                 }
             });
         });

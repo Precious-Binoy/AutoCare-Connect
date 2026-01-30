@@ -39,6 +39,7 @@ $bookingsQuery = "SELECT
                     u.name as customer_name,
                     u.email as customer_email,
                     CONCAT(v.make, ' ', v.model) as vehicle,
+                    v.license_plate,
                     m.id as mechanic_id,
                     mu.name as mechanic_name,
                     pd.driver_name,
@@ -224,19 +225,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <!-- Filters -->
-                <div class="flex justify-between mb-4">
-                    <div class="search-bar" style="width: 300px;">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="text" class="form-control" placeholder="Search by Customer or Booking ID...">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="text-sm text-muted">
+                        <!-- Empty space for balance -->
                     </div>
-                    <div class="flex gap-2">
-                        <select class="form-control" style="width: 150px;">
-                            <option>All Statuses</option>
-                            <option>Pending</option>
-                            <option>In Progress</option>
-                            <option>Completed</option>
+                    <div class="flex items-center gap-3">
+                        <div id="resultsCounter" class="text-sm text-muted font-medium">
+                            <!-- Results count will appear here -->
+                        </div>
+                        <select id="statusFilter" class="form-control" style="width: 180px;">
+                            <option value="">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="ready_for_delivery">Ready for Delivery</option>
+                            <option value="completed">Completed</option>
                         </select>
-                        <button class="btn btn-outline btn-icon"><i class="fa-solid fa-filter"></i></button>
                     </div>
                 </div>
 
@@ -272,11 +275,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         elseif ($booking['status'] === 'in_progress') $badgeClass = 'badge-info';
                                         elseif ($booking['status'] === 'ready_for_delivery') $badgeClass = 'badge-primary';
                                         ?>
-                                        <tr style="border-bottom: 1px solid var(--border);">
+                                        <tr style="border-bottom: 1px solid var(--border);" data-status="<?php echo strtolower($booking['status']); ?>">
                                             <td class="p-4 font-bold">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
-                                            <td class="p-4">
+                                            <td class="p-4" data-customer="<?php echo htmlspecialchars($booking['customer_name'] ?? ''); ?>" data-vehicle="<?php echo htmlspecialchars($booking['vehicle'] ?? ''); ?>" data-plate="<?php echo htmlspecialchars($booking['license_plate'] ?? ''); ?>">
                                                 <div class="font-bold"><?php echo htmlspecialchars($booking['customer_name'] ?? 'Unknown'); ?></div>
                                                 <div class="text-xs text-muted"><?php echo htmlspecialchars($booking['vehicle'] ?? 'N/A'); ?></div>
+                                                <div class="text-[10px] text-primary font-mono font-bold"><?php echo htmlspecialchars($booking['license_plate'] ?? 'N/A'); ?></div>
                                             </td>
                                             <td class="p-4">
                                                 <div class="text-xs"><?php echo htmlspecialchars($booking['service_type']); ?></div>
@@ -333,13 +337,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                         <div class="flex items-center gap-2">
                                                             <span class="text-[9px] font-black uppercase text-muted w-12">Pickup:</span>
                                                             <?php if ($pickup['driver_name']): ?>
-                                                                <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($pickup['driver_name']); ?></span>
+                                                                <div class="flex items-center gap-1">
+                                                                    <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($pickup['driver_name']); ?></span>
+                                                                    <!-- Status Indicator -->
+                                                                    <?php if($pickup['status'] === 'completed'): ?>
+                                                                        <span class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100"><i class="fa-solid fa-check"></i> Done</span>
+                                                                    <?php elseif($pickup['status'] === 'in_transit'): ?>
+                                                                        <span class="text-[9px] text-blue-600 bg-blue-50 px-1 rounded border border-blue-100"><i class="fa-solid fa-truck-fast"></i> En Route</span>
+                                                                    <?php elseif($pickup['status'] === 'scheduled'): ?>
+                                                                        <span class="text-[9px] text-orange-600 bg-orange-50 px-1 rounded border border-orange-100"><i class="fa-solid fa-clock"></i> Assigned</span>
+                                                                    <?php endif; ?>
+                                                                </div>
                                                             <?php else: ?>
                                                                 <form method="POST" class="flex items-center gap-1">
                                                                     <input type="hidden" name="action" value="assign_driver">
                                                                     <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
                                                                     <input type="hidden" name="pd_id" value="<?php echo $pickup['id']; ?>">
-                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50" required>
+                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50 max-w-[100px]" required>
                                                                         <option value="">Assign Driver</option>
                                                                         <?php foreach($drivers as $d): ?>
                                                                             <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
@@ -356,13 +370,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                         <div class="flex items-center gap-2">
                                                             <span class="text-[9px] font-black uppercase text-muted w-12">Delivery:</span>
                                                             <?php if ($delivery['driver_name']): ?>
-                                                                <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($delivery['driver_name']); ?></span>
+                                                                <div class="flex items-center gap-1">
+                                                                    <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($delivery['driver_name']); ?></span>
+                                                                    <!-- Status Indicator -->
+                                                                    <?php if($delivery['status'] === 'completed'): ?>
+                                                                        <span class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100"><i class="fa-solid fa-check"></i> Done</span>
+                                                                    <?php elseif($delivery['status'] === 'in_transit'): ?>
+                                                                        <span class="text-[9px] text-blue-600 bg-blue-50 px-1 rounded border border-blue-100"><i class="fa-solid fa-truck-fast"></i> En Route</span>
+                                                                    <?php elseif($delivery['status'] === 'scheduled'): ?>
+                                                                        <span class="text-[9px] text-orange-600 bg-orange-50 px-1 rounded border border-orange-100"><i class="fa-solid fa-clock"></i> Assigned</span>
+                                                                    <?php endif; ?>
+                                                                </div>
                                                             <?php else: ?>
                                                                 <form method="POST" class="flex items-center gap-1">
                                                                     <input type="hidden" name="action" value="assign_driver">
                                                                     <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
                                                                     <input type="hidden" name="pd_id" value="<?php echo $delivery['id']; ?>">
-                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50" required>
+                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50 max-w-[100px]" required>
                                                                         <option value="">Assign Driver</option>
                                                                         <?php foreach($drivers as $d): ?>
                                                                             <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
@@ -414,11 +438,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $badgeClass = 'badge-success';
                                         if ($booking['status'] === 'cancelled') $badgeClass = 'badge-danger';
                                         ?>
-                                        <tr style="border-bottom: 1px solid var(--border); background: #fcfcfc;">
+                                        <tr style="border-bottom: 1px solid var(--border); background: #fcfcfc;" data-status="<?php echo strtolower($booking['status']); ?>">
                                             <td class="p-4 font-bold text-muted">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
-                                            <td class="p-4">
+                                            <td class="p-4" data-customer="<?php echo htmlspecialchars($booking['customer_name'] ?? ''); ?>" data-vehicle="<?php echo htmlspecialchars($booking['vehicle'] ?? ''); ?>" data-plate="<?php echo htmlspecialchars($booking['license_plate'] ?? ''); ?>">
                                                 <div class="font-bold"><?php echo htmlspecialchars($booking['customer_name'] ?? 'Unknown'); ?></div>
                                                 <div class="text-xs text-muted"><?php echo htmlspecialchars($booking['vehicle'] ?? 'N/A'); ?></div>
+                                                <div class="text-[10px] text-primary font-mono font-bold"><?php echo htmlspecialchars($booking['license_plate'] ?? 'N/A'); ?></div>
                                             </td>
                                             <td class="p-4">
                                                 <div class="text-xs"><?php echo htmlspecialchars($booking['service_type']); ?></div>
@@ -497,6 +522,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
+        // Status Filter functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusFilter = document.getElementById('statusFilter');
+            const resultsCounter = document.getElementById('resultsCounter');
+            
+            // Function to apply status filter
+            function applyFilter() {
+                const selectedStatus = statusFilter ? statusFilter.value.toLowerCase() : '';
+                
+                // Get all table rows from both Active and History tables
+                const allRows = document.querySelectorAll('table tbody tr');
+                let visibleCount = 0;
+                
+                allRows.forEach((row) => {
+                    // Get row status from data-status attribute
+                    const rowStatusAttribute = row.getAttribute('data-status');
+                    
+                    // Skip rows that don't have a status (like empty state messages or headers)
+                    if (!rowStatusAttribute) {
+                        return;
+                    }
+                    
+                    const rowStatus = rowStatusAttribute.toLowerCase();
+                    
+                    // Check if status matches (or if "All Statuses" is selected)
+                    const shouldShow = selectedStatus === '' || rowStatus === selectedStatus;
+                    
+                    // Show or hide row
+                    row.style.display = shouldShow ? '' : 'none';
+                    
+                    if (shouldShow) {
+                        visibleCount++;
+                    }
+                });
+                
+                // Update results counter
+                if (resultsCounter) {
+                    if (selectedStatus) {
+                        resultsCounter.innerHTML = `<i class="fa-solid fa-filter text-primary"></i> <span class="font-bold">${visibleCount}</span> booking${visibleCount !== 1 ? 's' : ''} found`;
+                    } else {
+                        resultsCounter.innerHTML = '';
+                    }
+                }
+            }
+            
+            // Add event listener to status filter
+            if (statusFilter) {
+                statusFilter.addEventListener('change', applyFilter);
+                
+                // Run filter on page load in case dropdown has a pre-selected value
+                if (statusFilter.value) {
+                    applyFilter();
+                }
+            }
+        });
+
         function viewFinancials(bookingId) {
             const modal = document.getElementById('financialModal');
             const content = document.getElementById('financialContent');

@@ -51,6 +51,11 @@ $todayRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE stat
 $todayRevenueResult = executeQuery($todayRevenueQuery, [], '');
 $todayRevenue = $todayRevenueResult ? ($todayRevenueResult->fetch_assoc()['revenue'] ?? 0) : 0;
 
+// Total Revenue (All Time)
+$totalRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE status IN ('completed', 'delivered')";
+$totalRevenueResult = executeQuery($totalRevenueQuery, [], '');
+$totalRevenue = $totalRevenueResult ? ($totalRevenueResult->fetch_assoc()['revenue'] ?? 0) : 0;
+
 // Recent activity - latest 5 bookings
 $recentActivityQuery = "SELECT b.id, b.booking_number, b.status, b.created_at, b.service_type, 
                         u.name as customer_name, u.email as customer_email
@@ -91,16 +96,16 @@ if ($recentActivityResult) {
                 </div>
 
                 <!-- Statistics Cards -->
-                <div class="grid gap-4 mb-8" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="grid gap-4 mb-8" style="grid-template-columns: repeat(5, 1fr);">
                     <div class="card p-4 border-l-4 border-warning">
                         <div class="flex justify-between">
                             <div>
-                                <span class="text-muted text-sm font-medium">Pending Bookings</span>
+                                <span class="text-muted text-sm font-medium">Pending</span>
                                 <div class="flex items-end gap-2 mt-1">
-                                    <span class="text-3xl font-bold"><?php echo $pendingBookings; ?></span>
+                                    <span class="text-2xl font-bold"><?php echo $pendingBookings; ?></span>
                                 </div>
                             </div>
-                            <span class="text-warning text-xl"><i class="fa-solid fa-clipboard-list"></i></span>
+                            <span class="text-warning text-lg"><i class="fa-solid fa-clipboard-list"></i></span>
                         </div>
                     </div>
 
@@ -108,12 +113,12 @@ if ($recentActivityResult) {
                     <div class="card p-4 border-l-4 border-info">
                         <div class="flex justify-between">
                             <div>
-                                <span class="text-muted text-sm font-medium">In Progress</span>
+                                <span class="text-muted text-sm font-medium">Active</span>
                                 <div class="flex items-end gap-2 mt-1">
-                                    <span class="text-3xl font-bold"><?php echo $inProgressBookings; ?></span>
+                                    <span class="text-2xl font-bold"><?php echo $inProgressBookings; ?></span>
                                 </div>
                             </div>
-                            <span class="text-info text-xl"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                            <span class="text-info text-lg"><i class="fa-solid fa-screwdriver-wrench"></i></span>
                         </div>
                     </div>
 
@@ -121,12 +126,12 @@ if ($recentActivityResult) {
                     <div class="card p-4 border-l-4 border-success">
                         <div class="flex justify-between">
                             <div>
-                                <span class="text-muted text-sm font-medium">Completed Today</span>
+                                <span class="text-muted text-sm font-medium">Done Today</span>
                                 <div class="flex items-end gap-2 mt-1">
-                                    <span class="text-3xl font-bold"><?php echo $completedToday; ?></span>
+                                    <span class="text-2xl font-bold"><?php echo $completedToday; ?></span>
                                 </div>
                             </div>
-                            <span class="text-success text-xl"><i class="fa-solid fa-circle-check"></i></span>
+                            <span class="text-success text-lg"><i class="fa-solid fa-circle-check"></i></span>
                         </div>
                     </div>
 
@@ -134,12 +139,25 @@ if ($recentActivityResult) {
                     <div class="card p-4 border-l-4 border-accent">
                         <div class="flex justify-between">
                             <div>
-                                <span class="text-muted text-sm font-medium">Today's Revenue</span>
+                                <span class="text-muted text-sm font-medium">Today's Rev</span>
                                 <div class="flex items-end gap-2 mt-1">
-                                    <span class="text-3xl font-bold">₹<?php echo number_format($todayRevenue, 2); ?></span>
+                                    <span class="text-xl font-bold">₹<?php echo number_format($todayRevenue); ?></span>
                                 </div>
                             </div>
-                            <span class="text-accent text-xl"><i class="fa-solid fa-indian-rupee-sign"></i></span>
+                            <span class="text-accent text-lg"><i class="fa-solid fa-indian-rupee-sign"></i></span>
+                        </div>
+                    </div>
+
+                    <!-- Total Revenue (NEW) -->
+                    <div class="card p-4 border-l-4 border-primary bg-primary/5">
+                        <div class="flex justify-between">
+                            <div>
+                                <span class="text-primary font-bold text-sm">Total Revenue</span>
+                                <div class="flex items-end gap-2 mt-1">
+                                    <span class="text-xl font-black text-gray-900">₹<?php echo number_format($totalRevenue); ?></span>
+                                </div>
+                            </div>
+                            <span class="text-primary text-lg"><i class="fa-solid fa-sack-dollar"></i></span>
                         </div>
                     </div>
                 </div>

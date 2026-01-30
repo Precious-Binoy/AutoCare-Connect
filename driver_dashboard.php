@@ -58,16 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $bookingId = intval($_POST['booking_id']);
     $requestId = intval($_POST['request_id']);
 
-    if ($action === 'accept_job') {
-        $updateQuery = "UPDATE pickup_delivery SET status = 'in_transit', driver_user_id = ?, driver_name = ?, driver_phone = ?, updated_at = NOW() WHERE id = ?";
-        $result = executeQuery($updateQuery, [$user_id, $_SESSION['user_name'], $_SESSION['user_phone'] ?? 'N/A', $requestId], 'issi');
-        
-        if ($result) {
-            $success_msg = "Job accepted successfully!";
-        } else {
-            $error_msg = "Failed to accept job.";
-        }
-    } elseif ($action === 'complete_job') {
+    if ($action === 'complete_job') {
         $fee = floatval($_POST['fee'] ?? 0);
         $conn->begin_transaction();
         try {
@@ -81,20 +72,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $pd = $pdRes->fetch_assoc();
 
             if ($pd['type'] === 'delivery') {
-                $status = 'delivered';
-                $updateBooking = "UPDATE bookings SET status = ?, final_cost = IFNULL(final_cost, 0) + ? WHERE id = ?";
+                // Final completion - Update booking to 'completed' and set completion date
+                $status = 'completed';
+                $updateBooking = "UPDATE bookings SET status = ?, final_cost = IFNULL(final_cost, 0) + ?, completion_date = NOW() WHERE id = ?";
                 executeQuery($updateBooking, [$status, $fee, $bookingId], 'sdi');
                 
                 // Final service update
-                $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, ?, ?, ?, ?)";
-                executeQuery($insertUpdate, [$bookingId, 'delivered', "Vehicle has been delivered back to the customer. Delivery Fee: ₹" . number_format($fee, 2), 100, $user_id], 'issii');
+                $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'completed', ?, 100, ?)";
+                executeQuery($insertUpdate, [$bookingId, "Vehicle has been delivered back to the customer. Mission Accomplished.", $user_id], 'isi');
             } else { // pickup
                 // Update booking to show it's at workshop/confirmed
                 $updateBooking = "UPDATE bookings SET status = 'confirmed', final_cost = IFNULL(final_cost, 0) + ? WHERE id = ?";
                 executeQuery($updateBooking, [$fee, $bookingId], 'di');
 
-                $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, ?, ?, ?, ?)";
-                executeQuery($insertUpdate, [$bookingId, 'in_transit', "Vehicle picked up and arrived at workshop. Pickup Fee: ₹" . number_format($fee, 2), 25, $user_id], 'issii');
+                $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'confirmed', ?, 25, ?)";
+                executeQuery($insertUpdate, [$bookingId, "Vehicle picked up and arrived at workshop. Ready for service.", $user_id], 'isi');
             }
 
             // Set driver back to available
@@ -102,6 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             $conn->commit();
             $success_msg = "Job completed successfully!";
+            
+            // Redirect to refresh and clear post data
+            header("Location: driver_dashboard.php?tab=history");
+            exit;
         } catch (Exception $e) {
             $conn->rollback();
             $error_msg = "Failed to complete job: " . $e->getMessage();
@@ -127,7 +123,7 @@ $hasActiveTask = $hasActiveTaskRes->fetch_assoc()['active_count'] > 0;
 // Fetch Available Jobs (Sequenced)
 // 1. Pickup: status 'scheduled' and b.status 'pending' or 'confirmed'
 // 2. Delivery: status 'scheduled' and b.status 'ready_for_delivery'
-$availableJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, v.make, v.model, v.year, v.license_plate, u.name as customer_name, u.phone as customer_phone
+$availableJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name, u.phone as customer_phone
                        FROM pickup_delivery pd 
                        JOIN bookings b ON pd.booking_id = b.id 
                        JOIN vehicles v ON b.vehicle_id = v.id 
@@ -154,20 +150,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_job'])) {
         
         $conn->begin_transaction();
         try {
-            // Assign driver
-            $updateQuery = "UPDATE pickup_delivery SET status = 'in_transit', driver_user_id = ?, driver_name = ?, driver_phone = ?, updated_at = NOW() WHERE id = ? AND (driver_user_id IS NULL OR driver_user_id = 0)";
+            // Assign driver - KEEP STATUS 'scheduled' (wait for start mission)
+            $updateQuery = "UPDATE pickup_delivery SET status = 'scheduled', driver_user_id = ?, driver_name = ?, driver_phone = ?, updated_at = NOW() WHERE id = ? AND (driver_user_id IS NULL OR driver_user_id = 0)";
             $driverName = $driverData['name'] ?? $_SESSION['user_name'];
             $driverPhone = $_SESSION['user_phone'] ?? 'N/A';
             
             $result = executeQuery($updateQuery, [$user_id, $driverName, $driverPhone, $request_id], 'issi');
             
             if ($result && $conn->affected_rows > 0) {
+                // Success case
+                $success = true;
+            } else {
+                // Fallback verification: Check if we were effectively assigned anyway
+                // (Sometimes mysqli->affected_rows is unreliable with prepared stmt wrappers)
+                $verifyQuery = "SELECT driver_user_id FROM pickup_delivery WHERE id = ?";
+                $verifyRes = executeQuery($verifyQuery, [$request_id], 'i');
+                $verifyRow = $verifyRes->fetch_assoc();
+                
+                if ($verifyRow && $verifyRow['driver_user_id'] == $user_id) {
+                    $success = true;
+                } else {
+                    $success = false;
+                }
+            }
+
+            if ($success) {
                 // Set availability to false
                 executeQuery("UPDATE drivers SET is_available = FALSE WHERE user_id = ?", [$user_id], 'i');
                 
                 // Add service update
-                $statusMsg = "Driver assigned and en route.";
-                $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'in_transit', ?, 15, ?)";
+                $statusMsg = "Driver assigned. Waiting to start mission.";
+                $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'scheduled', ?, 15, ?)";
                 executeQuery($insertUpdate, [$bookingId, $statusMsg, $user_id], 'isi');
                 
                 $conn->commit();
@@ -178,7 +191,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_job'])) {
                 exit;
             } else {
                 $conn->rollback();
-                $error_msg = "Failed to accept job or it was already taken.";
+                $error_msg = "Failed to accept job: It may have been taken by another driver.";
             }
         } catch (Exception $e) {
             $conn->rollback();
@@ -187,8 +200,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_job'])) {
     }
 }
 
+// Handle Start Mission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_mission'])) {
+    $requestId = intval($_POST['request_id']);
+    $bookingId = intval($_POST['booking_id']);
+    
+    $conn->begin_transaction();
+    try {
+        // Update status to in_transit
+        $updateQuery = "UPDATE pickup_delivery SET status = 'in_transit', updated_at = NOW() WHERE id = ? AND driver_user_id = ?";
+        executeQuery($updateQuery, [$requestId, $user_id], 'ii');
+        
+        // Add service update
+        $statusMsg = "Driver is on the way.";
+        $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'in_transit', ?, 30, ?)";
+        executeQuery($insertUpdate, [$bookingId, $statusMsg, $user_id], 'isi');
+        
+        $conn->commit();
+        $success_msg = "Mission started! Drive safely.";
+        
+        header("Location: driver_dashboard.php?tab=jobs&subtab=active");
+        exit;
+    } catch (Exception $e) {
+        $conn->rollback();
+        $error_msg = "Error starting mission: " . $e->getMessage();
+    }
+}
+
 // Fetch Active Jobs for this driver
-$activeJobsQuery = "SELECT pd.*, b.booking_number, v.make, v.model, v.year, v.license_plate, u.name as customer_name, u.phone as customer_phone
+$activeJobsQuery = "SELECT pd.*, b.booking_number, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name, u.phone as customer_phone
                     FROM pickup_delivery pd 
                     JOIN bookings b ON pd.booking_id = b.id 
                     JOIN vehicles v ON b.vehicle_id = v.id 
@@ -209,7 +249,7 @@ if ($activeJobsRes) {
 }
 
 // Fetch History
-$historyQuery = "SELECT pd.*, b.booking_number, v.make, v.model, v.year, v.license_plate 
+$historyQuery = "SELECT pd.*, b.booking_number, v.make, v.model, v.year, v.license_plate, v.color 
                  FROM pickup_delivery pd 
                  JOIN bookings b ON pd.booking_id = b.id 
                  JOIN vehicles v ON b.vehicle_id = v.id 
@@ -325,7 +365,15 @@ $page_title = 'Driver Dashboard';
                                                                 <h3 class="text-sm font-black text-gray-900 leading-tight truncate">
                                                                     <?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?>
                                                                 </h3>
-                                                                <p class="font-mono text-[10px] text-gray-500 mt-1 bg-white px-1.5 py-0.5 rounded border border-gray-100 w-fit"><?php echo htmlspecialchars($job['license_plate']); ?></p>
+                                                                <div class="flex flex-wrap gap-2 mt-1">
+                                                                    <p class="font-mono text-[10px] text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-100 w-fit"><?php echo htmlspecialchars($job['license_plate']); ?></p>
+                                                                    <?php if(!empty($job['color'])): ?>
+                                                                        <p class="font-bold text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 w-fit flex items-center gap-1">
+                                                                            <span class="w-2 h-2 rounded-full border border-gray-300" style="background-color: <?php echo htmlspecialchars($job['color']); ?>"></span>
+                                                                            <?php echo htmlspecialchars($job['color']); ?>
+                                                                        </p>
+                                                                    <?php endif; ?>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -345,6 +393,22 @@ $page_title = 'Driver Dashboard';
                                                         </div>
                                                     </div>
                                                 </div>
+
+                                                <!-- Client Info -->
+                                                <div class="mb-6 flex items-center justify-between bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-8 h-8 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center text-xs font-bold">
+                                                            <i class="fa-solid fa-user"></i>
+                                                        </div>
+                                                        <div>
+                                                            <div class="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Client</div>
+                                                            <div class="font-bold text-gray-900 text-sm"><?php echo htmlspecialchars($job['customer_name']); ?></div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="font-mono text-xs font-bold text-gray-600 bg-white px-2 py-1 rounded border border-gray-200">
+                                                        <?php echo htmlspecialchars($job['customer_phone'] ?? 'N/A'); ?>
+                                                    </div>
+                                                </div>
                                             </div>
                                             
                                             <div class="p-4 bg-gray-50/50 border-t border-gray-100">
@@ -352,8 +416,8 @@ $page_title = 'Driver Dashboard';
                                                     <input type="hidden" name="action" value="accept_job">
                                                     <input type="hidden" name="booking_id" value="<?php echo $job['booking_id']; ?>">
                                                     <input type="hidden" name="request_id" value="<?php echo $job['id']; ?>">
-                                                    <button type="submit" name="accept_job" class="btn btn-primary w-full py-3.5 font-bold shadow-lg shadow-blue-500/20 text-sm rounded-xl hover:scale-[1.02] transition-transform">
-                                                        Accept Mission <i class="fa-solid fa-arrow-right ml-2 opacity-60"></i>
+                                                    <button type="submit" name="accept_job" class="btn btn-primary w-auto px-4 py-2 text-xs font-bold rounded-lg shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 mx-auto">
+                                                        <i class="fa-solid fa-check-circle"></i> Accept Mission
                                                     </button>
                                                 </form>
                                             </div>
@@ -389,7 +453,15 @@ $page_title = 'Driver Dashboard';
                                                         <i class="fa-solid fa-circle text-[6px] mr-2"></i> Live Mission
                                                     </span>
                                                     <h3 class="text-3xl md:text-4xl font-black text-white mb-1"><?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?></h3>
-                                                    <p class="text-sm font-medium text-gray-400">Booking #<?php echo $job['booking_number']; ?></p>
+                                                    <div class="flex items-center gap-3">
+                                                        <p class="text-sm font-medium text-gray-400">Booking #<?php echo $job['booking_number']; ?></p>
+                                                        <?php if(!empty($job['color'])): ?>
+                                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-white/10 text-white border border-white/10 flex items-center gap-1.5">
+                                                                <span class="w-2 h-2 rounded-full border border-white/30" style="background-color: <?php echo htmlspecialchars($job['color']); ?>"></span>
+                                                                <?php echo htmlspecialchars($job['color']); ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </div>
                                                 <div class="text-right">
                                                     <span class="badge bg-white/10 backdrop-blur-md text-white border border-white/10 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider shadow-xl">
@@ -425,68 +497,71 @@ $page_title = 'Driver Dashboard';
                                                         </div>
                                                     </div>
                                                     
-                                                    <div class="pt-4 mt-2 border-t border-gray-100">
-                                                        <?php 
-                                                            $nav_url = "https://www.google.com/maps/search/?api=1&query=";
-                                                            if (!empty($job['lat']) && !empty($job['lng'])) {
-                                                                $nav_url .= $job['lat'] . "," . $job['lng'];
-                                                            } else {
-                                                                $nav_url .= urlencode($job['address']);
-                                                            }
-                                                        ?>
-                                                        <a href="<?php echo $nav_url; ?>" target="_blank" class="btn btn-primary w-full py-3.5 text-xs font-bold rounded-xl items-center justify-center flex shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-transform">
-                                                            <i class="fa-solid fa-location-arrow mr-2"></i> Start Navigation
-                                                        </a>
-                                                    </div>
+                                                    <!-- Navigation moved to bottom bar -->
                                                 </div>
 
                                                 <!-- Customer Card -->
-                                                <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 flex flex-col justify-between group hover:border-purple-100 transition-colors">
+                                                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
                                                     <div>
-                                                        <label class="text-[10px] uppercase font-bold text-gray-400 mb-4 block tracking-wider flex items-center gap-2">
-                                                            <i class="fa-solid fa-user text-purple-500"></i> Client Contact
+                                                        <label class="text-[10px] uppercase font-bold text-gray-400 mb-2 block tracking-wider flex items-center gap-2">
+                                                            <i class="fa-solid fa-user text-purple-500"></i> Client
                                                         </label>
-                                                        <div class="flex items-center gap-4 mb-4">
-                                                            <div class="w-12 h-12 bg-gray-900 text-white rounded-2xl shadow-lg flex items-center justify-center text-lg font-bold shrink-0">
+                                                        <div class="flex items-center gap-3 mb-3">
+                                                            <div class="w-10 h-10 bg-gray-900 text-white rounded-lg shadow-sm flex items-center justify-center text-base font-bold shrink-0">
                                                                 <?php echo strtoupper(substr($job['customer_name'] ?? 'C', 0, 1)); ?>
                                                             </div>
                                                             <div>
-                                                                <div class="font-bold text-gray-900 text-lg leading-snug"><?php echo htmlspecialchars($job['customer_name']); ?></div>
-                                                                <div class="text-xs text-muted font-mono mt-1"><?php echo htmlspecialchars($job['customer_phone']); ?></div>
+                                                                <div class="font-bold text-gray-900 text-sm leading-snug"><?php echo htmlspecialchars($job['customer_name']); ?></div>
+                                                                <div class="text-[10px] text-muted font-mono mt-0.5"><?php echo htmlspecialchars($job['customer_phone'] ?? 'N/A'); ?></div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div class="pt-4 mt-2 border-t border-gray-100 flex gap-3">
-                                                        <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="btn btn-outline bg-gray-50 border-gray-200 flex-1 py-3.5 text-xs font-bold rounded-xl items-center justify-center flex hover:bg-gray-100 hover:border-gray-300 text-gray-700">
-                                                            <i class="fa-solid fa-phone mr-2"></i> Call
-                                                        </a>
-                                                        <button onclick="navigator.clipboard.writeText('<?php echo htmlspecialchars($job['customer_phone']); ?>'); alert('Copied!');" class="btn btn-outline bg-gray-50 border-gray-200 w-12 py-3.5 rounded-xl flex items-center justify-center hover:bg-gray-100">
-                                                            <i class="fa-solid fa-copy text-gray-500"></i>
-                                                        </button>
-                                                    </div>
+                                                    <!-- Call action moved to bottom bar -->
                                                 </div>
                                             </div>
 
                                             <!-- Actions -->
-                                             <div class="bg-gray-50 -mx-6 -mb-6 md:-mx-10 md:-mb-10 p-6 md:p-8 border-t border-gray-200">
-                                                 <?php if ($job['status'] === 'scheduled'): ?>
-                                                     <form method="POST">
-                                                         <input type="hidden" name="action" value="accept_job">
-                                                         <input type="hidden" name="booking_id" value="<?php echo $job['booking_id']; ?>">
-                                                         <input type="hidden" name="request_id" value="<?php echo $job['id']; ?>">
-                                                         <button type="submit" class="btn btn-primary w-full py-4 text-base font-black rounded-xl shadow-lg shadow-blue-500/20 hover:shadow-xl hover:-translate-y-1 transition-all">
-                                                             <i class="fa-solid fa-play mr-2"></i> Confirm Start of Mission
-                                                         </button>
-                                                     </form>
-                                                 <?php else: ?>
-                                                     <button type="button" class="btn btn-success w-full py-4 text-base font-black rounded-xl shadow-lg shadow-green-500/20 hover:shadow-xl hover:-translate-y-1 transition-all" 
-                                                             onclick="openDriverCompleteModal(<?php echo $job['booking_id']; ?>, <?php echo $job['id']; ?>, '<?php echo $job['type']; ?>')">
-                                                         <i class="fa-solid fa-flag-checkered mr-2"></i> Mission Accomplished
-                                                     </button>
-                                                 <?php endif; ?>
-                                                <p class="text-[10px] text-center text-muted font-bold mt-4 flex items-center justify-center opacity-70">
-                                                    <i class="fa-solid fa-shield-halved mr-1.5"></i> Follow safety protocols strictly.
-                                                </p>
+                                             <div class="bg-gray-50 border-t border-gray-200 p-4">
+                                                 <div class="flex flex-wrap items-center gap-3">
+                                                      <!-- Navigate -->
+                                                      <?php 
+                                                          $nav_url = "https://www.google.com/maps/search/?api=1&query=";
+                                                          if (!empty($job['lat']) && !empty($job['lng'])) {
+                                                              $nav_url .= $job['lat'] . "," . $job['lng'];
+                                                          } else {
+                                                              $nav_url .= urlencode($job['address']);
+                                                          }
+                                                      ?>
+                                                      <a href="<?php echo $nav_url; ?>" target="_blank" class="btn btn-primary w-auto px-4 py-2 text-xs font-bold rounded-lg inline-flex items-center justify-center shadow-sm hover:bg-blue-600">
+                                                          <i class="fa-solid fa-location-arrow mr-2"></i> Navigate
+                                                      </a>
+
+                                                      <!-- Call -->
+                                                      <a href="tel:<?php echo htmlspecialchars($job['customer_phone'] ?? ''); ?>" class="btn btn-outline border-gray-200 w-auto px-4 py-2 text-xs font-bold rounded-lg inline-flex items-center justify-center hover:bg-white bg-white text-gray-700">
+                                                          <i class="fa-solid fa-phone mr-2"></i> Call 
+                                                          <span class="ml-2 font-mono opacity-70 border-l border-gray-200 pl-2"><?php echo htmlspecialchars($job['customer_phone'] ?? 'N/A'); ?></span>
+                                                      </a>
+
+                                                      <!-- Action (Start/Complete) -->
+                                                      <?php if ($job['status'] === 'scheduled'): ?>
+                                                          <form method="POST" class="inline-block">
+                                                              <input type="hidden" name="start_mission" value="1">
+                                                              <input type="hidden" name="booking_id" value="<?php echo $job['booking_id']; ?>">
+                                                              <input type="hidden" name="request_id" value="<?php echo $job['id']; ?>">
+                                                              <button type="submit" class="btn btn-primary w-auto px-4 py-2 text-xs font-bold rounded-lg shadow-sm hover:shadow-md inline-flex items-center">
+                                                                  <i class="fa-solid fa-play mr-2"></i> Confirm Start
+                                                              </button>
+                                                          </form>
+                                                      <?php else: ?>
+                                                          <button type="button" class="btn btn-success w-auto px-4 py-2 text-xs font-bold rounded-lg shadow-sm hover:shadow-md inline-flex items-center" 
+                                                                  onclick="openDriverCompleteModal(<?php echo $job['booking_id']; ?>, <?php echo $job['id']; ?>, '<?php echo $job['type']; ?>')">
+                                                              <i class="fa-solid fa-flag-checkered mr-2"></i> Complete Mission
+                                                          </button>
+                                                      <?php endif; ?>
+                                                  </div>
+                                                  <p class="text-[10px] text-center text-muted font-bold mt-3 flex items-center justify-center opacity-70">
+                                                      <i class="fa-solid fa-shield-halved mr-1.5"></i> Follow safety protocols.
+                                                  </p>
                                              </div>
                                         </div>
                                     </div>
@@ -543,7 +618,15 @@ $page_title = 'Driver Dashboard';
                                                     </td>
                                                     <td class="p-6">
                                                         <div class="font-black text-gray-800"><?php echo $h['year'] . ' ' . $h['make'] . ' ' . $h['model']; ?></div>
-                                                        <div class="text-[10px] font-mono text-muted uppercase"><?php echo htmlspecialchars($h['license_plate']); ?></div>
+                                                        <div class="flex items-center gap-2 mt-0.5">
+                                                            <div class="text-[10px] font-mono text-muted uppercase"><?php echo htmlspecialchars($h['license_plate']); ?></div>
+                                                            <?php if(!empty($h['color'])): ?>
+                                                                <span class="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 rounded flex items-center gap-1">
+                                                                    <span class="w-1.5 h-1.5 rounded-full" style="background-color: <?php echo htmlspecialchars($h['color']); ?>"></span>
+                                                                    <?php echo htmlspecialchars($h['color']); ?>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </div>
                                                     </td>
                                                     <td class="p-6 font-mono text-primary font-black">#<?php echo $h['booking_number']; ?></td>
                                                     <td class="p-6 text-right">
