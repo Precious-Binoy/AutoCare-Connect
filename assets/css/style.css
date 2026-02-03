@@ -72,6 +72,126 @@
     display: none !important;
 }
 
+.fixed {
+    position: fixed !important;
+}
+
+.absolute {
+    position: absolute !important;
+}
+
+.relative {
+    position: relative !important;
+}
+
+.inset-0 {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+.z-modal {
+    z-index: 9999 !important;
+}
+
+.flex {
+    display: flex !important;
+}
+
+.items-center {
+    align-items: center !important;
+}
+
+.justify-center {
+    justify-content: center !important;
+}
+
+.justify-between {
+    justify-content: space-between !important;
+}
+
+.flex-col {
+    flex-direction: column !important;
+}
+
+.gap-3 {
+    gap: 0.75rem !important;
+}
+
+.gap-4 {
+    gap: 1rem !important;
+}
+
+.w-full {
+    width: 100% !important;
+}
+
+.h-full {
+    height: 100% !important;
+}
+
+.max-w-4xl {
+    max-width: 56rem !important;
+}
+
+.max-h-90vh {
+    max-height: 90vh !important;
+}
+
+.bg-black-60 {
+    background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+.backdrop-blur {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
+
+.rounded-3xl {
+    border-radius: 1.5rem !important;
+}
+
+.shadow-2xl {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+.overflow-hidden {
+    overflow: hidden !important;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Map specific */
+.h-500 {
+    height: 500px !important;
+}
+
+
 /* =========================================
    Reset & Base Styles
    ========================================= */
@@ -537,6 +657,118 @@ img {
     justify-content: center;
     font-size: 1.5rem;
     margin-bottom: 1.5rem;
+}
+
+/* Car Brands Section - Colorful Logos Grid */
+.brands-section {
+    padding: 4rem 1.5rem;
+    background: #F8FAFC;
+}
+
+.brands-section .container {
+    width: 100%;
+    max-width: 1200px;
+    padding: 0 2rem;
+    margin: 0 auto;
+}
+
+.brands-grid-logos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 2rem;
+    margin-top: 3rem;
+}
+
+.brand-logo-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.5rem 1rem;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.brand-logo-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+    border-color: var(--primary);
+}
+
+.brand-logo-img {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand-logo-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+.brand-logo-card:hover .brand-logo-img img {
+    transform: scale(1.1);
+}
+
+.brand-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-main);
+    text-align: center;
+    margin: 0;
+    transition: color 0.3s ease;
+}
+
+.brand-logo-card:hover .brand-label {
+    color: var(--primary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .brands-grid-logos {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .brand-logo-card {
+        padding: 1.25rem 0.75rem;
+    }
+
+    .brand-logo-img {
+        width: 70px;
+        height: 70px;
+    }
+
+    .brand-label {
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .brands-grid-logos {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+
+    .brand-logo-card {
+        padding: 1rem 0.5rem;
+    }
+
+    .brand-logo-img {
+        width: 60px;
+        height: 60px;
+    }
+
+    .brand-label {
+        font-size: 0.75rem;
+    }
 }
 
 /* =========================================

@@ -263,7 +263,7 @@ if ($garageResult) {
                             // Re-fetch recent bookings with billing info
                             $recentQuery = "SELECT 
                                 b.id, b.booking_number, b.service_type, b.service_category, b.status, 
-                                b.preferred_date, b.created_at, b.bill_amount, b.is_billed, b.service_notes,
+                                b.preferred_date, b.created_at, b.final_cost, b.is_billed, b.service_notes,
                                 v.make, v.model, v.year, v.license_plate
                                 FROM bookings b
                                 INNER JOIN vehicles v ON b.vehicle_id = v.id
@@ -300,14 +300,14 @@ if ($garageResult) {
                                             </div>
                                         </div>
                                         
-                                        <?php if ($booking['is_billed']): ?>
+                                        <?php if ($booking['is_billed'] || $booking['final_cost'] > 0): ?>
                                         <div class="bg-blue-50/50 px-5 py-3 border-t border-blue-100/50 flex justify-between items-center">
                                             <div class="flex items-center gap-2">
                                                 <i class="fa-solid fa-file-invoice-dollar text-primary"></i>
-                                                <span class="text-xs font-bold text-blue-900">Total Bill: ₹<?php echo number_format($booking['bill_amount'], 2); ?></span>
+                                                <span class="text-xs font-bold text-blue-900">Total Bill: ₹<?php echo number_format($booking['final_cost'], 2); ?></span>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                 <span class="text-[10px] text-muted italic line-clamp-1 max-w-[200px]"><?php echo htmlspecialchars($booking['service_notes']); ?></span>
+                                                 <span class="text-[10px] text-muted italic line-clamp-1 max-w-[200px]"><?php echo htmlspecialchars($booking['service_notes'] ?? ''); ?></span>
                                             </div>
                                         </div>
                                         <?php endif; ?>

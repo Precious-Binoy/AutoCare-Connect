@@ -51,11 +51,14 @@ $isDriver = $userRole === 'driver';
             </a>
         <?php elseif ($isDriver): ?>
             <!-- Driver Navigation -->
-            <a href="driver_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'jobs') ? 'active' : ''; ?>">
-                <i class="fa-solid fa-gauge"></i> Dashboard
+            <a href="driver_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? 'jobs') == 'jobs') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-truck-fast"></i> My Jobs
             </a>
             <a href="driver_dashboard.php?tab=history" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'history') ? 'active' : ''; ?>">
-                <i class="fa-solid fa-history"></i> History
+                <i class="fa-solid fa-clock-rotate-left"></i> Job History
+            </a>
+            <a href="driver_dashboard.php?tab=profile" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'profile') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-user-gear"></i> Profile Settings
             </a>
         <?php else: ?>
             <!-- Customer Navigation -->

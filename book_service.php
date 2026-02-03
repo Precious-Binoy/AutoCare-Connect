@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
         try {
             $booking_number = 'BK-' . strtoupper(bin2hex(random_bytes(4)));
             $has_pickup = (isset($_POST['request_pickup']) && $_POST['request_pickup'] === '1') ? 1 : 0;
-            $query = "INSERT INTO bookings (booking_number, user_id, vehicle_id, service_type, preferred_date, notes, status, has_pickup_delivery) VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)";
+            $query = "INSERT INTO bookings (booking_number, user_id, vehicle_id, service_type, preferred_date, notes, status, has_pickup_delivery) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)";
             executeQuery($query, [$booking_number, $user_id, $vehicle_id, $service_type, $preferred_date, $notes, $has_pickup], 'siisssi');
             $booking_id = $conn->insert_id;
 
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
             }
 
             // Initial service update
-            $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'confirmed', 'Service booking confirmed and scheduled.', 10, ?)";
+            $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'pending', 'Service booking request received. Waiting for confirmation.', 10, ?)";
             executeQuery($insertUpdate, [$booking_id, $user_id], 'ii');
 
             $conn->commit();
@@ -392,49 +392,6 @@ $page_title = 'Book Service';
                         </div>
                     </section>
 
-                    <!-- Map Modal - Fixed -->
-                    <div id="mapModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" style="display: none;">
-                        <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-fade-in">
-                            <!-- Modal Header -->
-                            <div class="px-8 py-6 bg-gradient-to-r from-purple-500 to-indigo-600 text-white flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                                        <i class="fa-solid fa-map-location-dot text-2xl"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="text-2xl font-bold">Choose Pickup Location</h3>
-                                        <p class="text-sm text-white/80">Click on map or drag marker to set exact location</p>
-                                    </div>
-                                </div>
-                                <button type="button" id="closeMapBtn" class="w-12 h-12 hover:bg-white/20 rounded-xl transition-all flex items-center justify-center">
-                                    <i class="fa-solid fa-times text-2xl"></i>
-                                </button>
-                            </div>
-
-                            <!-- Map Container -->
-                            <div class="relative h-[500px] bg-gray-100">
-                                <div id="pickupMap" class="w-full h-full"></div>
-                                <div id="mapLoader" class="absolute inset-0 flex items-center justify-center bg-white" style="display: flex;">
-                                    <div class="flex flex-col items-center gap-4">
-                                        <div class="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-                                        <span class="text-lg font-bold text-gray-700">Loading Map...</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Modal Footer -->
-                            <div class="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <span class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span>
-                                    <span id="mapCoordinates" class="text-sm font-semibold text-gray-700">Click map to select location</span>
-                                </div>
-                                <button type="button" id="confirmLocationBtn" class="px-8 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all">
-                                    <i class="fa-solid fa-check mr-2"></i>
-                                    Confirm Location
-                                </button>
-                            </div>
-                        </div>
-                    </div>
 
                     <div class="flex justify-center gap-6 pt-10">
                         <button type="submit" class="btn btn-primary h-20 px-24 text-2xl font-black rounded-3xl shadow-2xl shadow-blue-100 transition-all hover:scale-105 active:scale-95 flex items-center gap-4">
@@ -571,15 +528,14 @@ $page_title = 'Book Service';
                 this.disabled = true;
                 
                 try {
-                    // Force display with multiple methods
+                    // Force display using inline styles for maximum reliability
                     mapModal.style.display = 'flex';
                     mapModal.style.visibility = 'visible';
                     mapModal.style.opacity = '1';
-                    mapModal.classList.remove('hidden');
+                    mapModal.style.zIndex = '10000';
                     document.body.style.overflow = 'hidden';
                     
                     console.log('✅ Modal display set to flex');
-                    console.log('Modal element:', mapModal);
                     
                     // Initialize map after a short delay
                     setTimeout(() => {
@@ -590,12 +546,13 @@ $page_title = 'Book Service';
                             openMapBtn.disabled = false;
                         } catch (error) {
                             console.error('❌ Map initialization error:', error);
-                            alert('Error loading map. Please refresh the page and try again.');
+                            alert('Error loading map: ' + error.message);
                             mapModal.style.display = 'none';
+                            document.body.style.overflow = '';
                             openMapBtn.innerHTML = originalHTML;
                             openMapBtn.disabled = false;
                         }
-                    }, 300);
+                    }, 200);
                 } catch (error) {
                     console.error('❌ Error opening modal:', error);
                     alert('Error opening map. Please try again.');
@@ -607,7 +564,6 @@ $page_title = 'Book Service';
             // Close map modal
             closeMapBtn.addEventListener('click', function() {
                 mapModal.style.display = 'none';
-                mapModal.classList.add('hidden');
                 document.body.style.overflow = ''; // Restore scroll
             });
 
@@ -615,7 +571,6 @@ $page_title = 'Book Service';
             mapModal.addEventListener('click', function(e) {
                 if (e.target === mapModal) {
                     mapModal.style.display = 'none';
-                    mapModal.classList.add('hidden');
                     document.body.style.overflow = '';
                 }
             });
@@ -624,7 +579,6 @@ $page_title = 'Book Service';
             confirmLocationBtn.addEventListener('click', function() {
                 if (latInput.value && lngInput.value) {
                     mapModal.style.display = 'none';
-                    mapModal.classList.add('hidden');
                     document.body.style.overflow = '';
                 } else {
                     alert('Please select a location on the map');
@@ -842,5 +796,43 @@ $page_title = 'Book Service';
             });
         });
     </script>
+    <!-- Map Modal - Relocated to body level for reliability -->
+    <div id="mapModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 10000; align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: white; border-radius: 20px; width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.3);">
+            <!-- Modal Header -->
+            <div style="padding: 20px 30px; background: #2563EB; color: white; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fa-solid fa-map-location-dot text-2xl"></i>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.25rem;">Choose Pickup Location</h3>
+                        <p style="margin: 5px 0 0; font-size: 0.8rem; opacity: 0.8;">Click on map to set your vehicle pickup point</p>
+                    </div>
+                </div>
+                <button type="button" id="closeMapBtn" style="background: rgba(255,255,255,0.2); border: 0; color: white; width: 40px; height: 40px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Map Container -->
+            <div style="position: relative; height: 500px; background: #f3f4f6;">
+                <div id="pickupMap" style="width: 100%; height: 100%;"></div>
+                <div id="mapLoader" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10001;">
+                    <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+                    <span style="font-weight: bold; color: #4b5563;">Loading Map...</span>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div style="padding: 20px 30px; background: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></div>
+                    <span id="mapCoordinates" style="font-size: 0.9rem; font-weight: 600; color: #374151;">Click map to select location</span>
+                </div>
+                <button type="button" id="confirmLocationBtn" style="background: #2563EB; color: white; border: 0; padding: 12px 25px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-check"></i> Confirm Location
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
