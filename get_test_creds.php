@@ -73,7 +73,7 @@ function ensurePendingPickup($conn, $customerId) {
         $conn->query("INSERT INTO bookings (user_id, vehicle_id, booking_number, service_type, status, has_pickup_delivery) VALUES ($customerId, $vehId, '$bookingNum', 'Oil Change', 'confirmed', 1)");
         $bookingId = $conn->insert_id;
 
-        $conn->query("INSERT INTO pickup_delivery (booking_id, type, status, address, request_date) VALUES ($bookingId, 'pickup', 'scheduled', '$full_addr', NOW())");
+        $conn->query("INSERT INTO pickup_delivery (booking_id, type, status, address) VALUES ($bookingId, 'pickup', 'scheduled', '$full_addr')");
         echo "Created new pending pickup request.\n";
     } else {
         echo "Existing pending pickup found.\n";

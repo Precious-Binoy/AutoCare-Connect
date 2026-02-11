@@ -38,6 +38,9 @@ $isDriver = $userRole === 'driver';
             <a href="admin_job_requests.php" class="nav-item <?php echo ($current_page == 'admin_job_requests.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-id-card"></i> Job Requests
             </a>
+            <a href="admin_leave_management.php" class="nav-item <?php echo ($current_page == 'admin_leave_management.php') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-calendar-minus"></i> Leave Requests
+            </a>
         <?php elseif ($isMechanic): ?>
             <!-- Mechanic Navigation -->
             <a href="mechanic_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'jobs') ? 'active' : ''; ?>">
@@ -48,6 +51,9 @@ $isDriver = $userRole === 'driver';
             </a>
             <a href="mechanic_dashboard.php?tab=profile" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'profile') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-user-gear"></i> Profile Settings
+            </a>
+            <a href="mechanic_dashboard.php?tab=leave" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'leave') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-calendar-minus"></i> Request Leave
             </a>
         <?php elseif ($isDriver): ?>
             <!-- Driver Navigation -->
@@ -60,6 +66,9 @@ $isDriver = $userRole === 'driver';
             <a href="driver_dashboard.php?tab=profile" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'profile') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-user-gear"></i> Profile Settings
             </a>
+            <a href="driver_dashboard.php?tab=leave" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'leave') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-calendar-minus"></i> Request Leave
+            </a>
         <?php else: ?>
             <!-- Customer Navigation -->
             <a href="customer_dashboard.php" class="nav-item <?php echo ($current_page == 'customer_dashboard.php') ? 'active' : ''; ?>">
@@ -68,7 +77,7 @@ $isDriver = $userRole === 'driver';
             <a href="my_vehicles.php" class="nav-item <?php echo ($current_page == 'my_vehicles.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-car"></i> My Vehicles
             </a>
-            <a href="history.php" class="nav-item <?php echo ($current_page == 'history.php') ? 'active' : ''; ?>">
+            <a href="my_bookings.php" class="nav-item <?php echo ($current_page == 'my_bookings.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-clock-rotate-left"></i> Service History
             </a>
             <a href="book_service.php" class="nav-item <?php echo ($current_page == 'book_service.php') ? 'active' : ''; ?>">

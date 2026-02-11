@@ -99,28 +99,24 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                     <!-- Worker Info Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                             <!-- Mechanic Card -->
-                            <div class="card p-4 flex flex-col gap-3">
-                                <div class="flex items-center gap-3">
-                                    <div class="avatar bg-primary text-white flex items-center justify-center rounded-xl text-xl font-bold" style="width: 45px; height: 45px;">
+                            <div class="card p-5 flex flex-col gap-3 border-l-4 border-primary">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 bg-primary text-white flex items-center justify-center rounded-2xl text-xl font-bold shadow-lg shadow-blue-100">
                                         <i class="fa-solid fa-screwdriver-wrench"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <div class="text-[10px] text-muted uppercase font-bold tracking-wider">Mechanic</div>
-                                        <div class="font-bold"><?php echo htmlspecialchars($booking['mechanic_name'] ?? 'Assigning Soon...'); ?></div>
+                                        <div class="text-[10px] text-primary uppercase font-black tracking-[0.2em]">Assigned Mechanic</div>
+                                        <div class="font-bold text-lg"><?php echo htmlspecialchars($booking['mechanic_name'] ?? 'Assigning Soon...'); ?></div>
                                     </div>
                                     <?php if (isset($booking['mechanic_phone']) && $booking['mechanic_phone']): ?>
-                                        <button onclick="copyToClipboard('<?php echo $booking['mechanic_phone']; ?>')" class="btn btn-sm btn-outline px-2" title="Copy Number">
-                                            <i class="fa-solid fa-copy"></i>
-                                        </button>
-                                        <a href="tel:<?php echo $booking['mechanic_phone']; ?>" class="btn btn-sm btn-primary px-2"><i class="fa-solid fa-phone"></i></a>
+                                        <a href="tel:<?php echo $booking['mechanic_phone']; ?>" class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center hover:scale-110 transition-transform shadow-md"><i class="fa-solid fa-phone text-sm"></i></a>
                                     <?php endif; ?>
                                 </div>
                             </div>
 
-                            <!-- Driver Cards (Loop for Pickup and Delivery) -->
+                            <!-- Driver Cards - Only show RELEVANT phase -->
                             <?php 
-                                // Fetch ALL drivers for this booking (both pickup and delivery)
-                                $driverQuery = "SELECT driver_name, driver_phone, status, type FROM pickup_delivery WHERE booking_id = ? ORDER BY created_at ASC";
+                                $driverQuery = "SELECT driver_name, driver_phone, status, type FROM pickup_delivery WHERE booking_id = ? ORDER BY CASE WHEN type = 'pickup' THEN 0 ELSE 1 END ASC, created_at ASC";
                                 $driverRes = executeQuery($driverQuery, [$booking_id], 'i');
                                 $drivers = [];
                                 if ($driverRes) {
@@ -129,67 +125,84 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                     }
                                 }
                                 
-                                // If no drivers scheduled but booking status implies it (e.g., pending)
                                 if (empty($drivers) && $booking['has_pickup_delivery']) {
                                     $drivers[] = [
-                                        'type' => 'pickup', // Default assumption
+                                        'type' => 'pickup',
                                         'driver_name' => '',
                                         'driver_phone' => '',
                                         'status' => 'pending'
                                     ];
                                 }
+
+                                // Filter: Only show the CURRENT relevant driver card
+                                $visibleDrivers = [];
+                                foreach ($drivers as $d) {
+                                    if ($d['type'] == 'pickup') {
+                                        if (in_array($booking['status'], ['pending', 'confirmed']) || $d['status'] != 'completed') {
+                                            $visibleDrivers[] = $d;
+                                        }
+                                    } elseif ($d['type'] == 'delivery') {
+                                        if (in_array($booking['status'], ['ready_for_delivery', 'completed', 'delivered'])) {
+                                            $visibleDrivers[] = $d;
+                                        }
+                                    }
+                                }
+                                
+                                if (empty($visibleDrivers) && !empty($drivers)) {
+                                    $visibleDrivers[] = $drivers[0];
+                                }
                             ?>
 
-                            <?php foreach ($drivers as $activeDriver): ?>
-                            <div class="card p-4 flex flex-col gap-3">
-                                <div class="flex items-center gap-3">
-                                    <div class="avatar bg-secondary text-white flex items-center justify-center rounded-xl text-xl font-bold" style="width: 45px; height: 45px;">
-                                        <i class="fa-solid fa-truck"></i>
+                            <?php foreach ($visibleDrivers as $activeDriver): ?>
+                            <div class="card p-5 flex flex-col gap-3 border-l-4 <?php echo $activeDriver['type'] == 'pickup' ? 'border-warning' : 'border-success'; ?>">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 <?php echo $activeDriver['type'] == 'pickup' ? 'bg-warning' : 'bg-success'; ?> text-white flex items-center justify-center rounded-2xl text-xl font-bold shadow-lg">
+                                        <i class="fa-solid <?php echo $activeDriver['type'] == 'pickup' ? 'fa-truck-arrow-right' : 'fa-truck-fast'; ?>"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <div class="text-[10px] text-muted uppercase font-bold tracking-wider"><?php echo ucfirst($activeDriver['type']); ?> Driver</div>
-                                        <div class="font-bold">
+                                        <div class="text-[10px] <?php echo $activeDriver['type'] == 'pickup' ? 'text-warning' : 'text-success'; ?> uppercase font-black tracking-[0.2em]"><?php echo ucfirst($activeDriver['type']); ?> Driver</div>
+                                        <div class="font-bold text-lg">
                                             <?php 
                                             if (!empty($activeDriver['driver_name'])) {
                                                 echo htmlspecialchars($activeDriver['driver_name']);
-                                            } elseif ($activeDriver) {
-                                                echo 'Driver Assignment Pending';
                                             } else {
-                                                echo 'No Active Driver';
+                                                echo 'Awaiting Assignment';
                                             }
                                             ?>
                                         </div>
                                     </div>
                                     <?php if ($activeDriver && $activeDriver['driver_phone']): ?>
-                                        <button onclick="copyToClipboard('<?php echo $activeDriver['driver_phone']; ?>')" class="btn btn-sm btn-outline px-2" title="Copy Number">
-                                            <i class="fa-solid fa-copy"></i>
-                                        </button>
-                                        <a href="tel:<?php echo $activeDriver['driver_phone']; ?>" class="btn btn-sm btn-primary px-2"><i class="fa-solid fa-phone"></i></a>
+                                        <a href="tel:<?php echo $activeDriver['driver_phone']; ?>" class="w-10 h-10 rounded-full <?php echo $activeDriver['type'] == 'pickup' ? 'bg-warning' : 'bg-success'; ?> text-white flex items-center justify-center hover:scale-110 transition-transform shadow-md"><i class="fa-solid fa-phone text-sm"></i></a>
                                     <?php endif; ?>
                                 </div>
-                                <?php if ($activeDriver): ?>
-                                    <div class="bg-gray-50 p-2 rounded text-[10px] font-bold uppercase flex items-center justify-between">
-                                        <span>Status: <?php echo str_replace('_', ' ', $activeDriver['status']); ?></span>
-                                        <span class="text-primary"><?php echo ucfirst($activeDriver['type']); ?></span>
-                                    </div>
-                                <?php endif; ?>
+                                <div class="bg-gray-50 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center justify-between">
+                                    <span class="flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full <?php 
+                                            if ($activeDriver['status'] == 'completed') echo 'bg-success';
+                                            elseif ($activeDriver['status'] == 'in_transit') echo 'bg-primary animate-pulse';
+                                            else echo 'bg-warning';
+                                        ?>"></span>
+                                        <?php echo str_replace('_', ' ', $activeDriver['status']); ?>
+                                    </span>
+                                    <span class="<?php echo $activeDriver['type'] == 'pickup' ? 'text-warning' : 'text-success'; ?>"><?php echo ucfirst($activeDriver['type']); ?></span>
+                                </div>
                             </div>
                             <?php endforeach; ?>
                         </div>
-                    </div>
 
                     <!-- Enhanced Tracker Component -->
-                    <div class="card p-10 mb-8 overflow-x-auto">
-                        <div class="text-center mb-8">
-                            <h3 class="font-bold text-lg">Service Progress Journey</h3>
+                    <div class="card p-8 mb-8 overflow-x-auto border-t-4 border-primary">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 class="font-black text-lg text-gray-900">Service Progress Journey</h3>
+                                <p class="text-xs text-muted mt-1">Real-time tracking of your vehicle's service lifecycle</p>
+                            </div>
                         </div>
                         <?php 
-                            // Determine if booking has pickup/delivery
                             $hasPickupDelivery = $booking['has_pickup_delivery'] ?? false;
                             $bStatus = $booking['status'];
                             $activeIndex = 0;
                             
-                            // Explicitly find pickup and delivery tasks from the $drivers array (if any)
                             $pickupTask = null;
                             $deliveryTask = null;
                             foreach ($drivers as $d) {
@@ -198,57 +211,50 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                             }
                             
                             if ($hasPickupDelivery) {
-                                // Pickup/Delivery Flow: Booked (0) → Pickup (1) → Repair (2) → Delivery (3) → Done (4)
+                                $hasPickupDriver = $pickupTask && !empty($pickupTask['driver_name']);
                                 
-                                // Base status mapping
-                                if ($bStatus == 'pending') {
+                                if ($bStatus == 'pending' || $bStatus == 'confirmed') {
                                     $activeIndex = 0;
-                                } elseif ($bStatus == 'confirmed') {
-                                    $activeIndex = 1; 
-                                } elseif ($bStatus == 'in_progress') {
-                                    $activeIndex = 2;
-                                } elseif ($bStatus == 'ready_for_delivery') {
-                                    $activeIndex = 3;
-                                } elseif ($bStatus == 'completed' || $bStatus == 'delivered') {
-                                    $activeIndex = 4;
                                 }
                                 
-                                // Refinements based on driver sub-tasks
-                                // If pickup is done but status hasn't moved to in_progress yet, it's technically waiting at service center (Step 1 complete -> transitioning to 2)
-                                // But simpler to stick to main status for the big steps.
-                                
-                                // If delivery driver is assigned/en-route, definitely Step 3 or higher
-                                if ($deliveryTask && ($deliveryTask['status'] == 'in_transit' || $deliveryTask['status'] == 'completed') && $activeIndex < 3) {
-                                    $activeIndex = 3;
-                                }
-                                
-                            } else {
-                                // Self-Drop Flow: Booked (0) → Arrived (1) → Repair (2) → Ready (3) → Collected (4)
-                                if ($bStatus == 'pending') {
-                                    $activeIndex = 0;
-                                } elseif ($bStatus == 'confirmed') {
+                                // Phase 1: Pickup (Only if driver is assigned)
+                                if ($pickupTask && $hasPickupDriver && ($pickupTask['status'] == 'scheduled' || $pickupTask['status'] == 'in_transit')) {
                                     $activeIndex = 1;
-                                } elseif ($bStatus == 'in_progress') {
+                                }
+
+                                // Phase 2: Repair (Status is in_progress or pickup finished)
+                                if ($bStatus == 'in_progress' || ($pickupTask && $pickupTask['status'] == 'completed')) {
                                     $activeIndex = 2;
-                                } elseif ($bStatus == 'ready_for_delivery') {
+                                }
+
+                                // Phase 3: Delivery (Status is ready_for_delivery or delivery is in_transit)
+                                if ($bStatus == 'ready_for_delivery' || ($deliveryTask && $deliveryTask['status'] == 'in_transit')) {
                                     $activeIndex = 3;
-                                } elseif ($bStatus == 'completed' || $bStatus == 'delivered') {
+                                }
+
+                                // Phase 4: Done
+                                if ($bStatus == 'delivered' || $bStatus == 'completed' || ($deliveryTask && $deliveryTask['status'] == 'completed')) {
                                     $activeIndex = 4;
                                 }
+                            } else {
+                                if ($bStatus == 'pending') $activeIndex = 0;
+                                elseif ($bStatus == 'confirmed') $activeIndex = 1;
+                                elseif ($bStatus == 'in_progress') $activeIndex = 2;
+                                elseif ($bStatus == 'ready_for_delivery') $activeIndex = 3;
+                                elseif ($bStatus == 'completed' || $bStatus == 'delivered') $activeIndex = 4;
                             }
 
-                            $progressWidth = ($activeIndex / 4) * 100 . '%';
+                            // Progress width as a fraction of the track between first and last dot centers
+                            $progressFraction = $activeIndex / 4;
                         ?>
-                        <div class="timeline-horizontal" style="min-width: 700px;">
-                            <div class="timeline-progress" style="width: <?php echo $progressWidth; ?>;"></div>
+                        <div class="timeline-horizontal" style="min-width: 600px;">
+                            <div class="timeline-progress" style="width: calc((100% - 3rem - 100px) * <?php echo $progressFraction; ?>);"></div>
 
-                            <!-- Step 1: Booked -->
                             <div class="timeline-step <?php echo $activeIndex >= 0 ? ($activeIndex > 0 ? 'completed' : 'active') : ''; ?>">
                                 <div class="timeline-dot"><i class="fa-solid fa-calendar-check"></i></div>
                                 <div class="timeline-label">Booked</div>
                             </div>
 
-                            <!-- Step 2: Pickup/Arrived -->
                             <div class="timeline-step <?php echo $activeIndex >= 1 ? ($activeIndex > 1 ? 'completed' : 'active') : ''; ?>">
                                 <div class="timeline-dot">
                                     <i class="fa-solid <?php echo $hasPickupDelivery ? 'fa-truck-pickup' : 'fa-warehouse'; ?>"></i>
@@ -256,7 +262,6 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                 <div class="timeline-label"><?php echo $hasPickupDelivery ? 'Pickup' : 'Arrival'; ?></div>
                             </div>
 
-                            <!-- Step 3: Repair -->
                             <div class="timeline-step <?php echo $activeIndex >= 2 ? ($activeIndex > 2 ? 'completed' : 'active') : ''; ?>">
                                 <div class="timeline-dot">
                                     <i class="fa-solid fa-screwdriver-wrench <?php echo ($activeIndex == 2) ? 'fa-spin' : ''; ?>"></i>
@@ -264,7 +269,6 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                 <div class="timeline-label">Service</div>
                             </div>
 
-                            <!-- Step 4: Delivery/Ready -->
                             <div class="timeline-step <?php echo $activeIndex >= 3 ? ($activeIndex > 3 ? 'completed' : 'active') : ''; ?>">
                                 <div class="timeline-dot">
                                     <i class="fa-solid <?php echo $hasPickupDelivery ? 'fa-truck-fast' : 'fa-car-side'; ?>"></i>
@@ -272,7 +276,6 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                 <div class="timeline-label"><?php echo $hasPickupDelivery ? 'Delivery' : 'Ready'; ?></div>
                             </div>
 
-                            <!-- Step 5: Done -->
                             <div class="timeline-step <?php echo $activeIndex >= 4 ? 'completed' : ''; ?>">
                                 <div class="timeline-dot"><i class="fa-solid fa-flag-checkered"></i></div>
                                 <div class="timeline-label">Completed</div>

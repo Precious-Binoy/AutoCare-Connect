@@ -132,7 +132,17 @@ if (isset($_GET['toggle_availability'])) {
 }
 
 // Check if driver already has an active task
-$hasActiveTaskQuery = "SELECT COUNT(*) as active_count FROM pickup_delivery WHERE driver_user_id = ? AND status IN ('scheduled', 'in_transit')";
+// This check MUST align with the $activeJobsQuery display logic
+$hasActiveTaskQuery = "SELECT COUNT(*) as active_count 
+                       FROM pickup_delivery pd 
+                       JOIN bookings b ON pd.booking_id = b.id
+                       WHERE pd.driver_user_id = ? 
+                       AND pd.status IN ('scheduled', 'in_transit')
+                       AND (
+                           (pd.type = 'pickup' AND b.status IN ('pending', 'confirmed', 'in_progress'))
+                           OR
+                           (pd.type = 'delivery' AND b.status = 'ready_for_delivery')
+                       )";
 $hasActiveTaskRes = executeQuery($hasActiveTaskQuery, [$user_id], 'i');
 $hasActiveTask = $hasActiveTaskRes->fetch_assoc()['active_count'] > 0;
 
@@ -154,6 +164,23 @@ if ($availableJobsRes) {
     while ($row = $availableJobsRes->fetch_assoc()) {
         $row['request_date'] = $row['created_at']; // Polyfill for display
         $availableJobs[] = $row;
+    }
+}
+
+// Fetch Mission History
+$historyJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name,
+                            COALESCE(pd.contact_phone, u.phone) as customer_phone
+                     FROM pickup_delivery pd
+                     JOIN bookings b ON pd.booking_id = b.id
+                     JOIN vehicles v ON b.vehicle_id = v.id
+                     JOIN users u ON b.user_id = u.id
+                     WHERE pd.driver_user_id = ? AND pd.status = 'completed'
+                     ORDER BY pd.updated_at DESC LIMIT 20";
+$historyJobsRes = executeQuery($historyJobsQuery, [$user_id], 'i');
+$historyJobs = [];
+if ($historyJobsRes) {
+    while ($row = $historyJobsRes->fetch_assoc()) {
+        $historyJobs[] = $row;
     }
 }
 
@@ -281,6 +308,16 @@ if ($historyRes) {
     }
 }
 
+// Fetch Leave Requests
+$leaveRequestsQuery = "SELECT * FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC";
+$leaveRequestsResult = executeQuery($leaveRequestsQuery, [$user_id], 'i');
+$leaveRequests = [];
+if ($leaveRequestsResult) {
+    while ($row = $leaveRequestsResult->fetch_assoc()) {
+        $leaveRequests[] = $row;
+    }
+}
+
 $page_title = 'Driver Dashboard';
 ?>
 <!DOCTYPE html>
@@ -338,6 +375,9 @@ $page_title = 'Driver Dashboard';
                                     <?php echo count($availableJobs); ?>
                                 </span>
                             <?php endif; ?>
+                        </a>
+                        <a href="?tab=leave" class="relative btn <?php echo ($activeTab === 'leave') ? 'btn-primary px-8 py-3 rounded-xl shadow-lg shadow-blue-500/20' : 'btn-outline px-8 py-3 rounded-xl bg-white'; ?>" style="position: relative;">
+                            <i class="fa-solid fa-calendar-minus mr-2"></i> Leave Requests
                         </a>
                     </div>
 
@@ -542,6 +582,76 @@ $page_title = 'Driver Dashboard';
                         </div>
                     <?php endif; ?>
 
+                <?php elseif ($activeTab === 'history'): ?>
+                    <!-- Redesigned Mission History Section -->
+                    <div class="animate-fade-in">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                            <div>
+                                <h1 class="text-3xl font-black text-gray-900 tracking-tight">Mission Log</h1>
+                                <p class="text-sm font-bold text-gray-400 mt-1 uppercase tracking-widest opacity-60">Archive of completed logistics operations</p>
+                            </div>
+                            <div class="px-6 py-3 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
+                                <i class="fa-solid fa-clipboard-check text-primary"></i>
+                                <div>
+                                    <span class="text-lg font-black text-gray-900"><?php echo count($historyJobs); ?></span>
+                                    <span class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-tighter">Completed Missions</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card p-0 overflow-hidden shadow-xl border-none">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left">
+                                    <thead class="bg-gray-50/80 border-b border-gray-100">
+                                        <tr class="text-[10px] font-black uppercase text-gray-400 tracking-[0.15em]">
+                                            <th class="p-6">Completed Date</th>
+                                            <th class="p-6">Vehicle & Customer</th>
+                                            <th class="p-6">Mission Type</th>
+                                            <th class="p-6">Service Fee</th>
+                                            <th class="p-6 text-right">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-sm">
+                                        <?php if (empty($historyJobs)): ?>
+                                            <tr>
+                                                <td colspan="5" class="p-20 text-center text-muted">
+                                                    <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                                        <i class="fa-solid fa-clock-rotate-left text-5xl text-gray-200"></i>
+                                                    </div>
+                                                    <h3 class="font-bold text-xl text-gray-400">No Mission History</h3>
+                                                    <p class="mt-2 text-xs">Your completed pickups and deliveries will appear here.</p>
+                                                </td>
+                                            </tr>
+                                        <?php else: ?>
+                                            <?php foreach ($historyJobs as $job): ?>
+                                                <tr class="border-t border-gray-50 hover:bg-blue-50/30 transition-colors group">
+                                                    <td class="p-6 font-bold text-gray-500 text-xs">
+                                                        <?php echo date('M d, Y', strtotime($job['updated_at'])); ?>
+                                                    </td>
+                                                    <td class="p-6">
+                                                        <div class="font-black text-gray-900 group-hover:text-primary transition-colors"><?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?></div>
+                                                        <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5"><?php echo htmlspecialchars($job['customer_name']); ?></div>
+                                                    </td>
+                                                    <td class="p-6">
+                                                        <span class="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider <?php echo $job['type'] == 'pickup' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-green-50 text-green-600 border border-green-100'; ?>">
+                                                            <?php echo $job['type']; ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-6 font-black text-gray-900">₹<?php echo number_format($job['fee'], 2); ?></td>
+                                                    <td class="p-6 text-right">
+                                                        <span class="badge badge-success px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest">
+                                                            Mission Accomplished
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                 <?php elseif ($activeTab === 'profile'): ?>
                     <!-- Professional Identity Section - Refined for Space -->
                     <div class="max-w-2xl mx-auto animate-fade-in pt-4">
@@ -591,78 +701,136 @@ $page_title = 'Driver Dashboard';
                         </div>
                     </div>
 
-                <?php elseif ($activeTab === 'history'): ?>
-                    <div class="flex flex-col gap-6 animate-fade-in">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-2xl font-black text-gray-800 flex items-center gap-3">
-                                <div class="w-10 h-10 bg-gray-100 text-gray-500 rounded-xl flex items-center justify-center">
-                                    <i class="fa-solid fa-clock-rotate-left"></i>
-                                </div>
-                                Journey Logs
-                            </h2>
+                <?php elseif ($activeTab === 'leave'): ?>
+                    <!-- Leave Requests Section -->
+                    <div class="flex flex-col lg:flex-row gap-8">
+                        <!-- Submission Form -->
+                        <div class="lg:w-1/3">
+                            <div class="card p-8 sticky top-8">
+                                <h3 class="text-2xl font-black text-gray-900 mb-6 font-primary">Request Leave</h3>
+                                <form id="leaveRequestForm" class="flex flex-col gap-6">
+                                    <input type="hidden" name="action" value="request">
+                                    <div class="form-group flex flex-col gap-2">
+                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Type of Leave</label>
+                                        <select name="leave_type" class="form-control h-12 px-4 font-bold rounded-xl" required>
+                                            <option value="sick">Sick Leave</option>
+                                            <option value="casual">Casual Leave</option>
+                                            <option value="emergency">Emergency</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="form-group flex flex-col gap-2">
+                                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Start Date</label>
+                                            <input type="date" name="start_date" class="form-control h-12 px-4 font-bold rounded-xl" required min="<?php echo date('Y-m-d'); ?>">
+                                        </div>
+                                        <div class="form-group flex flex-col gap-2">
+                                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">End Date</label>
+                                            <input type="date" name="end_date" class="form-control h-12 px-4 font-bold rounded-xl" required min="<?php echo date('Y-m-d'); ?>">
+                                        </div>
+                                    </div>
+                                    <div class="form-group flex flex-col gap-2">
+                                        <div class="flex justify-between items-center ml-1">
+                                            <label class="text-[10px] font-black uppercase text-gray-500 tracking-widest">Reason</label>
+                                            <span id="reasonCount" class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">0 / 500</span>
+                                        </div>
+                                        <textarea id="leaveReason" name="reason" class="form-control p-4 font-normal text-sm rounded-xl h-32 resize-none border-2 border-gray-100 focus:border-primary transition-all outline-none" placeholder="Briefly explain your reason (min 15 chars)..." required minlength="15" maxlength="500"></textarea>
+                                        <p id="validationMsg" class="text-[11px] text-red-500 hidden px-1 font-medium italic mt-1">Reason must be at least 15 characters.</p>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary h-11 font-black text-xs rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all uppercase tracking-widest">
+                                        Submit Request
+                                    </button>
+                                </form>
+                            </div>
                         </div>
-                        
-                        <div class="card p-0 overflow-hidden shadow-sm">
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left border-collapse">
-                                    <thead class="bg-gray-50/80 text-[10px] font-black uppercase text-muted tracking-widest border-b border-gray-100">
-                                        <tr>
-                                            <th class="p-6">Completion Log</th>
-                                            <th class="p-6">Type of Service</th>
-                                            <th class="p-6">Vehicle Archive</th>
-                                            <th class="p-6">Reference</th>
-                                            <th class="p-6 text-right">Verification</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="text-sm">
-                                        <?php if (empty($history)): ?>
-                                            <tr>
-                                                <td colspan="5" class="p-24 text-center">
-                                                    <div class="flex flex-col items-center opacity-20">
-                                                        <i class="fa-solid fa-receipt text-7xl mb-4"></i>
-                                                        <h4 class="text-xl font-black">Archive Empty</h4>
-                                                        <p class="text-sm">Completed assignments will be logged here.</p>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        <?php else: ?>
-                                            <?php foreach ($history as $h): ?>
-                                                <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                                    <td class="p-6 font-bold text-gray-500">
-                                                        <div class="text-gray-900"><?php echo date('M d, Y', strtotime($h['updated_at'])); ?></div>
-                                                        <div class="text-[10px] font-medium"><?php echo date('h:i A', strtotime($h['updated_at'])); ?></div>
-                                                    </td>
-                                                    <td class="p-6">
-                                                        <span class="badge <?php echo $h['type'] == 'pickup' ? 'badge-info' : 'badge-warning'; ?> uppercase text-[9px] font-black px-3 py-1 rounded-full">
-                                                            <?php echo $h['type']; ?>
-                                                        </span>
-                                                    </td>
-                                                    <td class="p-6">
-                                                        <div class="font-black text-gray-800"><?php echo $h['year'] . ' ' . $h['make'] . ' ' . $h['model']; ?></div>
-                                                        <div class="flex items-center gap-2 mt-0.5">
-                                                            <div class="text-[10px] font-mono text-muted uppercase"><?php echo htmlspecialchars($h['license_plate']); ?></div>
-                                                            <?php if(!empty($h['color'])): ?>
-                                                                <span class="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 rounded flex items-center gap-1">
-                                                                    <span class="w-1.5 h-1.5 rounded-full" style="background-color: <?php echo htmlspecialchars($h['color']); ?>"></span>
-                                                                    <?php echo htmlspecialchars($h['color']); ?>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </td>
-                                                    <td class="p-6 font-mono text-primary font-black">#<?php echo $h['booking_number']; ?></td>
-                                                    <td class="p-6 text-right">
-                                                        <span class="inline-flex items-center gap-2 text-green-600 font-black text-[10px] uppercase bg-green-50 px-3 py-1 rounded-lg">
-                                                            <i class="fa-solid fa-circle-check text-[8px]"></i> Completed
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
+
+                        <!-- Requests History -->
+                        <div class="lg:w-2/3">
+                            <h3 class="text-2xl font-black text-gray-900 mb-6 font-primary">My Leave History</h3>
+                            <div class="grid grid-cols-1 gap-6">
+                                <?php if (empty($leaveRequests)): ?>
+                                    <div class="card p-12 text-center text-muted border-dashed bg-gray-50/50">
+                                        <i class="fa-solid fa-calendar-xmark text-5xl mb-4 opacity-20"></i>
+                                        <p class="font-bold">No leave requests found.</p>
+                                    </div>
+                                <?php else: ?>
+                                    <?php foreach ($leaveRequests as $lr): ?>
+                                        <div class="card p-6 hover:shadow-xl transition-all border-l-4 <?php 
+                                            echo $lr['status'] === 'approved' ? 'border-green-500' : ($lr['status'] === 'rejected' ? 'border-red-500' : 'border-yellow-500'); 
+                                        ?>">
+                                            <div class="flex flex-col md:flex-row justify-between gap-4 mb-4">
+                                                <div>
+                                                    <span class="text-[10px] uppercase font-black tracking-widest text-primary mb-1 block"><?php echo $lr['leave_type']; ?> Leave</span>
+                                                    <h4 class="text-xl font-black text-gray-900">
+                                                        <?php echo date('M d', strtotime($lr['start_date'])); ?> - <?php echo date('M d, Y', strtotime($lr['end_date'])); ?>
+                                                    </h4>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <span class="badge <?php 
+                                                        echo $lr['status'] === 'approved' ? 'badge-success' : ($lr['status'] === 'rejected' ? 'badge-danger' : 'badge-warning'); 
+                                                    ?> px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                                                        <?php echo $lr['status']; ?>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <p class="text-gray-600 font-medium text-sm mb-4"><?php echo htmlspecialchars($lr['reason']); ?></p>
+                                            <?php if ($lr['admin_comment']): ?>
+                                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                                    <span class="text-[9px] uppercase font-black text-gray-400 mb-1 block">Admin Comment</span>
+                                                    <p class="text-sm font-bold text-gray-800 italic">"<?php echo htmlspecialchars($lr['admin_comment']); ?>"</p>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
+
+                    <script>
+                        const reasonInput = document.getElementById('leaveReason');
+                        const reasonCount = document.getElementById('reasonCount');
+                        const validationMsg = document.getElementById('validationMsg');
+
+                        reasonInput.addEventListener('input', () => {
+                            const length = reasonInput.value.length;
+                            reasonCount.textContent = `${length} / 500`;
+                            
+                            if (length > 0 && length < 15) {
+                                validationMsg.classList.remove('hidden');
+                                reasonInput.classList.add('border-red-500');
+                                reasonCount.classList.add('text-red-500');
+                            } else {
+                                validationMsg.classList.add('hidden');
+                                reasonInput.classList.remove('border-red-500');
+                                reasonCount.classList.remove('text-red-500');
+                            }
+                        });
+
+                        document.getElementById('leaveRequestForm').addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            const formData = new FormData(e.target);
+                            const data = Object.fromEntries(formData);
+                            
+                            try {
+                                const response = await fetch('api/leave_handler.php', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(data)
+                                });
+                                const result = await response.json();
+                                if (result.success) {
+                                    alert(result.message);
+                                    location.reload();
+                                } else {
+                                    alert(result.message);
+                                }
+                            } catch (error) {
+                                console.error('Error submitting leave request:', error);
+                                alert('An error occurred. Please try again.');
+                            }
+                        });
+                    </script>
                 <?php endif; ?>
             </div>
         </main>

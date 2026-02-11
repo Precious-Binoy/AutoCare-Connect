@@ -100,9 +100,9 @@ if ($recentActivityResult) {
                     <div class="card p-4 border-l-4 border-warning">
                         <div class="flex justify-between">
                             <div>
-                                <span class="text-muted text-sm font-medium">Pending</span>
+                                <span class="text-muted text-xs font-bold uppercase tracking-wider">Pending</span>
                                 <div class="flex items-end gap-2 mt-1">
-                                    <span class="text-2xl font-bold"><?php echo $pendingBookings; ?></span>
+                                    <span class="text-2xl font-black"><?php echo $pendingBookings; ?></span>
                                 </div>
                             </div>
                             <span class="text-warning text-lg"><i class="fa-solid fa-clipboard-list"></i></span>
@@ -231,7 +231,7 @@ if ($recentActivityResult) {
                         <div class="flex flex-col gap-4">
                              <!-- Mechanics -->
                              <div>
-                                 <div class="text-[10px] font-bold text-muted uppercase mb-2">Mechanics</div>
+                                 <div class="text-xs font-black text-muted uppercase mb-2 tracking-widest">Mechanics</div>
                                  <div class="flex flex-wrap gap-2">
                                      <?php
                                      $mStatusQuery = "SELECT u.name, m.is_available FROM mechanics m JOIN users u ON m.user_id = u.id LIMIT 5";
@@ -248,7 +248,7 @@ if ($recentActivityResult) {
 
                              <!-- Drivers -->
                              <div>
-                                 <div class="text-[10px] font-bold text-muted uppercase mb-2">Drivers</div>
+                                 <div class="text-xs font-black text-muted uppercase mb-2 tracking-widest">Drivers</div>
                                  <div class="flex flex-wrap gap-2">
                                      <?php
                                      $dStatusQuery = "SELECT u.name, d.is_available FROM drivers d JOIN users u ON d.user_id = u.id LIMIT 5";
@@ -309,12 +309,12 @@ if ($recentActivityResult) {
                                                 <?php echo strtoupper(substr($activity['customer_name'] ?? 'U', 0, 1)); ?>
                                             </div>
                                             <div>
-                                                <div class="font-bold text-sm"><?php echo htmlspecialchars($activity['customer_name'] ?? 'Unknown'); ?></div>
-                                                <div class="text-[10px] text-muted"><?php echo htmlspecialchars($activity['service_type']); ?></div>
+                                                <div class="font-bold text-sm text-gray-900"><?php echo htmlspecialchars($activity['customer_name'] ?? 'Unknown'); ?></div>
+                                                <div class="text-xs text-muted"><?php echo htmlspecialchars($activity['service_type']); ?></div>
                                             </div>
                                         </div>
                                         <div class="text-right">
-                                            <span class="badge <?php echo $badgeClass; ?> text-[10px]"><?php echo strtoupper(formatStatusLabel($activity['status'])); ?></span>
+                                            <span class="badge <?php echo $badgeClass; ?> text-[10px] px-2 py-0.5 rounded uppercase font-black"><?php echo formatStatusLabel($activity['status']); ?></span>
                                             <div class="text-[10px] text-muted mt-1"><?php echo $timeAgo; ?></div>
                                         </div>
                                     </div>
@@ -364,7 +364,7 @@ if ($recentActivityResult) {
                         <?php else: ?>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left">
-                                    <thead class="bg-gray-50 text-[10px] font-bold uppercase text-muted tracking-wider border-b border-gray-100">
+                                    <thead class="bg-gray-50 text-xs font-black uppercase text-muted tracking-widest border-b border-gray-100">
                                         <tr>
                                             <th class="p-4">Booking</th>
                                             <th class="p-4">Vehicle</th>
@@ -378,12 +378,12 @@ if ($recentActivityResult) {
                                         <?php foreach ($runningServices as $service): ?>
                                             <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                                                 <td class="p-4">
-                                                    <div class="font-mono text-primary font-bold">#<?php echo htmlspecialchars($service['booking_number']); ?></div>
-                                                    <div class="text-[10px] text-muted"><?php echo htmlspecialchars($service['customer_name']); ?></div>
+                                                    <div class="font-mono text-primary font-bold text-xs">#<?php echo htmlspecialchars($service['booking_number']); ?></div>
+                                                    <div class="text-xs text-muted"><?php echo htmlspecialchars($service['customer_name']); ?></div>
                                                 </td>
                                                 <td class="p-4">
-                                                    <div class="font-bold text-gray-900"><?php echo htmlspecialchars($service['year'] . ' ' . $service['make'] . ' ' . $service['model']); ?></div>
-                                                    <div class="text-[10px] text-muted font-mono"><?php echo htmlspecialchars($service['license_plate']); ?></div>
+                                                    <div class="font-bold text-gray-900 text-sm"><?php echo htmlspecialchars($service['year'] . ' ' . $service['make'] . ' ' . $service['model']); ?></div>
+                                                    <div class="text-xs text-muted font-mono tracking-tighter"><?php echo htmlspecialchars($service['license_plate']); ?></div>
                                                 </td>
                                                 <td class="p-4">
                                                     <div class="text-gray-700"><?php echo htmlspecialchars($service['service_type']); ?></div>

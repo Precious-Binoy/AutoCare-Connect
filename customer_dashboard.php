@@ -29,23 +29,6 @@ $completedQuery = "SELECT COUNT(*) as total FROM bookings WHERE user_id = ? AND 
 $completedResult = executeQuery($completedQuery, [$userId], 'i');
 $completedServices = $completedResult ? $completedResult->fetch_assoc()['total'] : 0;
 
-// Get recent bookings
-$recentQuery = "SELECT 
-    b.id, b.booking_number, b.service_type, b.service_category, b.status, 
-    b.preferred_date, b.created_at,
-    v.make, v.model, v.year, v.license_plate
-    FROM bookings b
-    INNER JOIN vehicles v ON b.vehicle_id = v.id
-    WHERE b.user_id = ?
-    ORDER BY b.created_at DESC
-    LIMIT 3";
-$recentResult = executeQuery($recentQuery, [$userId], 'i');
-$recentBookings = [];
-if ($recentResult) {
-    while ($row = $recentResult->fetch_assoc()) {
-        $recentBookings[] = $row;
-    }
-}
 
 // Check for active deliveries with expanded driver info
 $deliveryQuery = "SELECT pd.id, pd.booking_id, pd.status, pd.driver_name, pd.driver_phone, pd.type, v.make, v.model, v.license_plate, v.color,
@@ -58,7 +41,7 @@ $deliveryQuery = "SELECT pd.id, pd.booking_id, pd.status, pd.driver_name, pd.dri
                   LEFT JOIN users u_d ON pd.driver_user_id = u_d.id
                   LEFT JOIN drivers d ON pd.driver_user_id = d.user_id
                   WHERE b.user_id = ? AND pd.status IN ('scheduled', 'in_transit')
-                  ORDER BY pd.created_at DESC
+                  ORDER BY CASE WHEN pd.type = 'pickup' THEN 0 ELSE 1 END ASC, pd.created_at DESC
                   LIMIT 1";
 $deliveryResult = executeQuery($deliveryQuery, [$userId], 'i');
 $activeDelivery = $deliveryResult ? $deliveryResult->fetch_assoc() : null;
@@ -144,18 +127,33 @@ if ($garageResult) {
                                 $bStatus = $activeDelivery['booking_status'] ?? 'pending';
                                 $pdStatus = $activeDelivery['status'];
                                 $pdType = $activeDelivery['type'];
+                                $hasDriver = !empty($activeDelivery['driver_name']);
                                 
                                 $activeIndex = 0;
-                                if ($bStatus == 'pending') $activeIndex = 0;
-                                if ($activeDelivery['type'] == 'pickup') {
-                                    if ($pdStatus == 'scheduled' || $pdStatus == 'in_transit') $activeIndex = 1;
-                                }
-                                if ($bStatus == 'confirmed') $activeIndex = 1;
-                                if ($bStatus == 'in_progress') $activeIndex = 2;
-                                if ($bStatus == 'ready_for_delivery') $activeIndex = 3;
-                                if ($bStatus == 'delivered' || $bStatus == 'completed') $activeIndex = 4;
+                                // Phase 0: Booked (Initial state)
+                                if ($bStatus == 'confirmed' || $bStatus == 'pending') $activeIndex = 0;
                                 
-                                $progressWidth = ($activeIndex / 4) * 100 . '%';
+                                // Phase 1: Pickup (Only if driver is assigned for a pickup task)
+                                if ($pdType == 'pickup' && $hasDriver && ($pdStatus == 'scheduled' || $pdStatus == 'in_transit')) {
+                                    $activeIndex = 1;
+                                }
+                                
+                                // Phase 2: Repair (Status is in_progress)
+                                if ($bStatus == 'in_progress') {
+                                    $activeIndex = 2;
+                                }
+                                
+                                // Phase 3: Delivery (Status is ready_for_delivery or delivery is in_transit)
+                                if ($bStatus == 'ready_for_delivery') {
+                                    $activeIndex = 3;
+                                }
+                                
+                                // Phase 4: Done
+                                if ($bStatus == 'delivered' || $bStatus == 'completed') {
+                                    $activeIndex = 4;
+                                }
+                                
+                                $progressFraction = $activeIndex / 4;
                             ?>
                             <div class="flex items-center justify-between mb-8">
                                 <span class="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -166,7 +164,7 @@ if ($garageResult) {
                             </div>
 
                             <div class="timeline-horizontal">
-                                <div class="timeline-progress" style="width: <?php echo $progressWidth; ?>;"></div>
+                                <div class="timeline-progress" style="width: calc((100% - 3rem - 100px) * <?php echo $progressFraction; ?>);"></div>
                                 
                                 <div class="timeline-step <?php echo $activeIndex >= 0 ? ($activeIndex > 0 ? 'completed' : 'active') : ''; ?>">
                                     <div class="timeline-dot"><i class="fa-solid fa-calendar-check text-[10px]"></i></div>
@@ -260,7 +258,7 @@ if ($garageResult) {
                         
                         <div class="flex flex-col gap-4">
                             <?php 
-                            // Re-fetch recent bookings with billing info
+                            // Fetch recent bookings with billing info
                             $recentQuery = "SELECT 
                                 b.id, b.booking_number, b.service_type, b.service_category, b.status, 
                                 b.preferred_date, b.created_at, b.final_cost, b.is_billed, b.service_notes,
@@ -290,7 +288,7 @@ if ($garageResult) {
                                                     <div class="text-xs text-muted">
                                                         #<?php echo $booking['booking_number']; ?> • 
                                                         <?php echo date('M d, Y', strtotime($booking['preferred_date'])); ?> •
-                                                        <span class="font-bold text-text-main uppercase"><?php echo htmlspecialchars($booking['make'] . ' ' . $booking['model']); ?></span>
+                                                        <span class="font-bold text-main uppercase"><?php echo htmlspecialchars($booking['make'] . ' ' . $booking['model']); ?></span>
                                                     </div>
                                                 </div>
                                             </div>

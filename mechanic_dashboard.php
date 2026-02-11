@@ -221,6 +221,16 @@ if ($historyResult) {
     }
 }
 
+// Fetch Leave Requests
+$leaveRequestsQuery = "SELECT * FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC";
+$leaveRequestsResult = executeQuery($leaveRequestsQuery, [$user_id], 'i');
+$leaveRequests = [];
+if ($leaveRequestsResult) {
+    while ($row = $leaveRequestsResult->fetch_assoc()) {
+        $leaveRequests[] = $row;
+    }
+}
+
 $page_title = 'Mechanic Dashboard';
 ?>
 <!DOCTYPE html>
@@ -272,6 +282,9 @@ $page_title = 'Mechanic Dashboard';
                                     <?php echo count($availableJobs); ?>
                                 </span>
                             <?php endif; ?>
+                        </a>
+                        <a href="?tab=leave" class="relative btn <?php echo ($activeTab === 'leave') ? 'btn-primary px-8 py-3 rounded-xl shadow-lg shadow-blue-500/20' : 'btn-outline px-8 py-3 rounded-xl bg-white'; ?>" style="position: relative;">
+                            <i class="fa-solid fa-calendar-minus mr-2"></i> Leave Requests
                         </a>
                     </div>
 
@@ -504,73 +517,191 @@ $page_title = 'Mechanic Dashboard';
                         </div>
                     </div>
 
-                <?php elseif ($activeTab === 'profile'): ?>
-                    <!-- Profile Section -->
-                    <div class="max-w-2xl mx-auto">
-                        <div class="mb-6">
-                            <h1 class="text-3xl font-bold text-gray-900">Professional Identity</h1>
-                            <p class="text-muted">Your public-facing expertise and background settings.</p>
+                <?php elseif ($activeTab === 'leave'): ?>
+                    <!-- ... existing leave section remains same ... -->
+                    <!-- Leave Requests Section -->
+                    <div class="flex flex-col lg:flex-row gap-8">
+                        <!-- Submission Form -->
+                        <div class="lg:w-1/3">
+                            <div class="card p-8 sticky top-8">
+                                <h3 class="text-2xl font-black text-gray-900 mb-6">Request Leave</h3>
+                                <form id="leaveRequestForm" class="flex flex-col gap-6">
+                                    <input type="hidden" name="action" value="request">
+                                    <div class="form-group flex flex-col gap-2">
+                                        <label class="text-xs font-black uppercase text-gray-500 ml-1">Type of Leave</label>
+                                        <select name="leave_type" class="form-control h-12 px-4 font-bold rounded-xl" required>
+                                            <option value="sick">Sick Leave</option>
+                                            <option value="casual">Casual Leave</option>
+                                            <option value="emergency">Emergency</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="form-group flex flex-col gap-2">
+                                            <label class="text-xs font-black uppercase text-gray-500 ml-1">Start Date</label>
+                                            <input type="date" name="start_date" class="form-control h-12 px-4 font-bold rounded-xl" required min="<?php echo date('Y-m-d'); ?>">
+                                        </div>
+                                        <div class="form-group flex flex-col gap-2">
+                                            <label class="text-xs font-black uppercase text-gray-500 ml-1">End Date</label>
+                                            <input type="date" name="end_date" class="form-control h-12 px-4 font-bold rounded-xl" required min="<?php echo date('Y-m-d'); ?>">
+                                        </div>
+                                    </div>
+                                    <div class="form-group flex flex-col gap-2">
+                                        <div class="flex justify-between items-center ml-1">
+                                            <label class="text-xs font-black uppercase text-gray-500">Reason</label>
+                                            <span id="reasonCount" class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">0 / 500</span>
+                                        </div>
+                                        <textarea id="leaveReason" name="reason" class="form-control p-4 font-normal text-sm rounded-xl h-32 resize-none border-2 border-gray-100 focus:border-primary transition-all outline-none" placeholder="Briefly explain your reason (min 15 chars)..." required minlength="15" maxlength="500"></textarea>
+                                        <p id="validationMsg" class="text-[11px] text-red-500 hidden px-1 font-medium italic mt-1">Reason must be at least 15 characters.</p>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary h-11 font-black text-sm rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all uppercase tracking-widest">
+                                        Submit Request
+                                    </button>
+                                </form>
+                            </div>
                         </div>
 
-                        <div class="card overflow-hidden">
-                            <div class="bg-gradient-to-r from-primary/10 to-transparent p-8 flex flex-col md:flex-row items-center gap-6 border-b border-gray-100">
-                                <div class="relative">
-                                    <img src="<?php echo $mechanic['profile_image'] ? $mechanic['profile_image'] : 'https://ui-avatars.com/api/?name=' . urlencode($mechanic['name']) . '&background=0D9488&color=fff&size=256'; ?>" 
-                                         class="w-24 h-24 rounded-2xl object-cover shadow-2xl border-4 border-white" alt="Profile">
-                                    <div class="absolute -bottom-2 -right-2 w-8 h-8 bg-primary text-white rounded-lg flex items-center justify-center shadow-lg border-2 border-white cursor-pointer">
-                                        <i class="fa-solid fa-camera"></i>
+                        <!-- Requests History -->
+                        <div class="lg:w-2/3">
+                            <h3 class="text-2xl font-black text-gray-900 mb-6">My Leave History</h3>
+                            <div class="grid grid-cols-1 gap-6">
+                                <?php if (empty($leaveRequests)): ?>
+                                    <div class="card p-12 text-center text-muted border-dashed bg-gray-50/50">
+                                        <i class="fa-solid fa-calendar-xmark text-5xl mb-4 opacity-20"></i>
+                                        <p class="font-bold">No leave requests found.</p>
                                     </div>
-                                </div>
-                                <div class="text-center md:text-left">
-                                    <h3 class="text-3xl font-black text-gray-900 mb-1"><?php echo htmlspecialchars($mechanic['name']); ?></h3>
-                                    <p class="text-lg text-primary font-bold mb-4 uppercase tracking-widest text-sm"><?php echo htmlspecialchars($mechanic['specialization']); ?> Expert</p>
-                                    <div class="flex flex-wrap gap-3 justify-center md:justify-start">
-                                        <span class="px-4 py-1.5 bg-white rounded-full text-xs font-bold text-muted shadow-sm border border-gray-100"><i class="fa-solid fa-envelope mr-1.5 opacity-60"></i> <?php echo htmlspecialchars($mechanic['email']); ?></span>
-                                        <span class="px-4 py-1.5 bg-white rounded-full text-xs font-bold text-muted shadow-sm border border-gray-100"><i class="fa-solid fa-shield mr-1.5 opacity-60"></i> Verified Professional</span>
-                                    </div>
-                                </div>
+                                <?php else: ?>
+                                    <?php foreach ($leaveRequests as $lr): ?>
+                                        <div class="card p-6 hover:shadow-xl transition-all border-l-4 <?php 
+                                            echo $lr['status'] === 'approved' ? 'border-green-500' : ($lr['status'] === 'rejected' ? 'border-red-500' : 'border-yellow-500'); 
+                                        ?>">
+                                            <div class="flex flex-col md:flex-row justify-between gap-4 mb-4">
+                                                <div>
+                                                    <span class="text-[10px] uppercase font-black tracking-widest text-primary mb-1 block"><?php echo $lr['leave_type']; ?> Leave</span>
+                                                    <h4 class="text-xl font-black text-gray-900">
+                                                        <?php echo date('M d', strtotime($lr['start_date'])); ?> - <?php echo date('M d, Y', strtotime($lr['end_date'])); ?>
+                                                    </h4>
+                                                </div>
+                                                <div class="flex items-center gap-3">
+                                                    <span class="badge <?php 
+                                                        echo $lr['status'] === 'approved' ? 'badge-success' : ($lr['status'] === 'rejected' ? 'badge-danger' : 'badge-warning'); 
+                                                    ?> px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                                                        <?php echo $lr['status']; ?>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <p class="text-gray-600 font-medium text-sm mb-4"><?php echo htmlspecialchars($lr['reason']); ?></p>
+                                            <?php if ($lr['admin_comment']): ?>
+                                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                                    <span class="text-[9px] uppercase font-black text-gray-400 mb-1 block">Admin Comment</span>
+                                                    <p class="text-sm font-bold text-gray-800 italic">"<?php echo htmlspecialchars($lr['admin_comment']); ?>"</p>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
+                        </div>
+                    </div>
 
-                            <div class="p-10">
-                                <form method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div class="form-group flex flex-col gap-2">
-                                        <label class="text-xs font-black uppercase text-gray-500 ml-1">Full Name</label>
-                                        <input type="text" name="name" class="form-control h-14 px-5 text-lg font-bold" value="<?php echo htmlspecialchars($mechanic['name']); ?>" required>
+                    <script>
+                        const reasonInput = document.getElementById('leaveReason');
+                        const reasonCount = document.getElementById('reasonCount');
+                        const validationMsg = document.getElementById('validationMsg');
+
+                        reasonInput.addEventListener('input', () => {
+                            const length = reasonInput.value.length;
+                            reasonCount.textContent = `${length} / 500`;
+                            
+                            if (length > 0 && length < 15) {
+                                validationMsg.classList.remove('hidden');
+                                reasonInput.classList.add('border-red-500');
+                                reasonCount.classList.add('text-red-500');
+                            } else {
+                                validationMsg.classList.add('hidden');
+                                reasonInput.classList.remove('border-red-500');
+                                reasonCount.classList.remove('text-red-500');
+                            }
+                        });
+
+                        document.getElementById('leaveRequestForm').addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            const formData = new FormData(e.target);
+                            const data = Object.fromEntries(formData);
+                            
+                            try {
+                                const response = await fetch('api/leave_handler.php', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(data)
+                                });
+                                const result = await response.json();
+                                if (result.success) {
+                                    alert(result.message);
+                                    location.reload();
+                                } else {
+                                    alert(result.message);
+                                }
+                            } catch (error) {
+                                console.error('Error submitting leave request:', error);
+                                alert('An error occurred. Please try again.');
+                            }
+                        });
+                    </script>
+                <?php elseif ($activeTab === 'profile'): ?>
+                    <!-- Minimalist Profile Identity Section -->
+                    <div class="max-w-md mx-auto animate-fade-in pt-4">
+                        <div class="glass-card border-none shadow-xl overflow-hidden">
+                            <div class="px-6 py-8 flex flex-col items-center text-center">
+                                <div class="relative mb-4 group">
+                                    <?php if ($mechanic['profile_image']): ?>
+                                        <img src="uploads/profiles/<?php echo htmlspecialchars($mechanic['profile_image']); ?>" 
+                                             class="w-20 h-20 rounded-2xl object-cover shadow-lg border-4 border-white" alt="Profile">
+                                    <?php else: ?>
+                                        <div class="w-20 h-20 rounded-2xl bg-primary bg-gradient-to-br from-primary to-blue-700 flex items-center justify-center text-white shadow-lg border-4 border-white">
+                                            <span class="text-3xl font-black tracking-tighter">P</span>
+                                        </div>
+                                    <?php endif; ?>
+                                    <div class="absolute -bottom-1 -right-1 w-7 h-7 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg border-2 border-white text-[10px]">
+                                        <i class="fa-solid fa-check"></i>
+                                    </div>
+                                </div>
+                                <h3 class="text-xl font-bold text-gray-900 mb-1"><?php echo htmlspecialchars($mechanic['name']); ?></h3>
+                                <div class="flex items-center gap-2 mb-6">
+                                    <span class="badge badge-primary px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider">Mechanic</span>
+                                    <span class="badge badge-white px-2 py-0.5 rounded-md text-[9px] font-bold text-muted border border-gray-100 uppercase tracking-wider"><?php echo htmlspecialchars($mechanic['specialization'] ?? 'Specialist'); ?></span>
+                                </div>
+
+                                <form method="POST" class="w-full flex flex-col gap-4">
+                                    <div class="form-group text-left">
+                                        <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-[0.1em] mb-1.5 block">Full Name</label>
+                                        <input type="text" name="name" class="form-control h-10 px-4 text-xs font-bold bg-gray-50/50 border-gray-100 focus:border-primary focus:bg-white transition-all rounded-xl" value="<?php echo htmlspecialchars($mechanic['name']); ?>" required>
                                     </div>
                                     
-                                    <div class="form-group flex flex-col gap-2">
-                                        <label class="text-xs font-black uppercase text-gray-500 ml-1">Contact Phone (Locked)</label>
-                                        <div class="relative h-14">
-                                            <input type="text" class="form-control h-full px-5 text-lg font-bold bg-gray-50 cursor-not-allowed border-dashed" value="<?php echo htmlspecialchars($mechanic['phone']); ?>" disabled>
-                                            <i class="fa-solid fa-lock absolute right-5 top-1/2 -translate-y-1/2 text-muted opacity-40"></i>
+                                    <div class="grid grid-cols-2 gap-4 text-left">
+                                        <div class="form-group">
+                                            <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-[0.1em] mb-1.5 block">Phone Number</label>
+                                            <div class="h-10 px-4 flex items-center text-xs font-bold bg-gray-50 border border-gray-100 rounded-xl text-gray-400">
+                                                <?php echo htmlspecialchars($mechanic['phone'] ?? 'N/A'); ?>
+                                            </div>
                                         </div>
-                                        <p class="text-[10px] text-muted italic ml-1">Contact platform support to update registered logistics number.</p>
-                                    </div>
-
-                                    <div class="form-group flex flex-col gap-2">
-                                        <label class="text-xs font-black uppercase text-gray-500 ml-1">Repair Specialization (Locked)</label>
-                                        <div class="relative h-14">
-                                            <input type="text" class="form-control h-full px-5 text-lg font-bold bg-gray-50 cursor-not-allowed border-dashed" value="<?php echo htmlspecialchars($mechanic['specialization']); ?>" disabled>
-                                            <i class="fa-solid fa-lock absolute right-5 top-1/2 -translate-y-1/2 text-muted opacity-40"></i>
+                                        <div class="form-group">
+                                            <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-[0.1em] mb-1.5 block">Experience</label>
+                                            <div class="h-10 px-4 flex items-center text-xs font-bold bg-gray-50 border border-gray-100 rounded-xl text-gray-400">
+                                                <?php echo htmlspecialchars($mechanic['years_experience'] ?? '0'); ?> Years
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div class="form-group flex flex-col gap-2">
-                                        <label class="text-xs font-black uppercase text-gray-500 ml-1">Years of Experience (Locked)</label>
-                                        <div class="relative h-14">
-                                            <input type="text" class="form-control h-full px-5 text-lg font-bold bg-gray-50 cursor-not-allowed border-dashed" value="<?php echo $mechanic['years_experience']; ?> Years" disabled>
-                                            <i class="fa-solid fa-lock absolute right-5 top-1/2 -translate-y-1/2 text-muted opacity-40"></i>
-                                        </div>
-                                    </div>
-
-                                    <div class="md:col-span-2 pt-8 border-t border-gray-100 flex justify-end">
-                                        <button type="submit" name="update_profile" class="btn btn-primary h-14 px-12 text-lg font-bold shadow-xl shadow-blue-100 transition-all active:scale-95">
-                                            <i class="fa-solid fa-floppy-disk mr-2"></i> Save Profile Updates
+                                    <div class="pt-4">
+                                        <button type="submit" name="update_profile" class="btn btn-primary w-full h-11 text-[10px] font-black shadow-lg shadow-blue-500/10 rounded-xl transition-all active:scale-[0.98] uppercase tracking-[0.2em] group">
+                                            <i class="fa-solid fa-check-circle mr-2 group-hover:scale-110 transition-transform"></i> Save Updates
                                         </button>
                                     </div>
                                 </form>
                             </div>
                         </div>
+                        <p class="mt-4 text-[9px] text-muted font-bold text-center uppercase tracking-widest opacity-40">Professional Profile Verified</p>
                     </div>
                 <?php endif; ?>
             </div>

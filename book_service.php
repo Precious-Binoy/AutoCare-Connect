@@ -195,10 +195,10 @@ $page_title = 'Book Service';
                                 </div>
                                 3. Additional Instructions
                             </h2>
-                            <div class="card p-8 h-full shadow-xl shadow-gray-100/50">
-                                <div class="form-group flex flex-col gap-2 h-full">
+                            <div class="card p-8 shadow-xl shadow-gray-100/50 bg-white h-full flex flex-col">
+                                <div class="form-group flex flex-col gap-2 flex-grow">
                                     <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Service Notes / Issues Reported</label>
-                                    <textarea name="notes" class="form-control flex-1 p-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all" placeholder="Describe any specific problems, sounds, or requests you have..."></textarea>
+                                    <textarea name="notes" rows="6" class="form-control text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full resize-none flex-grow" placeholder="Describe any specific problems, sounds, or requests you have..."></textarea>
                                 </div>
                             </div>
                         </div>
