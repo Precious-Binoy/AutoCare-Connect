@@ -58,6 +58,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
             $insertUpdate = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, 'pending', 'Service booking request received. Waiting for confirmation.', 10, ?)";
             executeQuery($insertUpdate, [$booking_id, $user_id], 'ii');
 
+            // Notify Admin
+            $adminRes = $conn->query("SELECT id FROM users WHERE role = 'admin'");
+            while ($admin = $adminRes->fetch_assoc()) {
+                executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'New Booking Request', 'New booking #$booking_number received from ' . '" . $_SESSION['user_name'] . "', 'booking')", [$admin['id']], 'i');
+            }
+
             $conn->commit();
             header("Location: customer_dashboard.php?booking_success=1&ref=" . $booking_number);
             exit;

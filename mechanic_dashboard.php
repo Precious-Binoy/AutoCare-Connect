@@ -15,7 +15,7 @@ $current_page = 'mechanic_dashboard.php';
 $activeTab = $_GET['tab'] ?? 'jobs';
 
 // Fetch mechanic and user info
-$mechanicQuery = "SELECT m.*, u.name, u.email, u.phone, u.profile_image 
+$mechanicQuery = "SELECT m.*, u.name, u.email, u.phone, u.profile_image, u.dob, u.address 
                   FROM mechanics m 
                   JOIN users u ON m.user_id = u.id 
                   WHERE u.id = ?";
@@ -31,19 +31,59 @@ $error_msg = '';
 
 // Handle Profile Update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
-    $name = sanitizeInput($_POST['name']);
-    // Removed phone, specialization, and years_experience from the update logic as per user request
-    
-    // Update basic user info
-    $updateUserQuery = "UPDATE users SET name = ? WHERE id = ?";
-    if (executeQuery($updateUserQuery, [$name, $user_id], 'si')) {
-        $_SESSION['user_name'] = $name;
-        $success_msg = "Profile updated successfully!";
-        // Refresh mechanic data
-        $mechanicRes = executeQuery($mechanicQuery, [$user_id], 'i');
-        $mechanic = $mechanicRes->fetch_assoc();
-    } else {
-        $error_msg = "Error updating profile.";
+    $name = sanitizeInput($_POST['name'] ?? '');
+    $phone = sanitizeInput($_POST['phone'] ?? '');
+    $dob = sanitizeInput($_POST['dob'] ?? '');
+    $address = sanitizeInput($_POST['address'] ?? '');
+    $specialization = sanitizeInput($_POST['specialization'] ?? '');
+    $experience = sanitizeInput($_POST['years_experience'] ?? '0');
+
+    // Handle Image Upload
+    $profile_image_path = $mechanic['profile_image'] ?? null;
+    if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = 'assets/uploads/profile/';
+        if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+        
+        $fileExt = strtolower(pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION));
+        $validExts = ['jpg', 'jpeg', 'png', 'gif'];
+        
+        if (in_array($fileExt, $validExts)) {
+            $newFileName = 'user_' . $user_id . '_' . time() . '.' . $fileExt;
+            $targetPath = $uploadDir . $newFileName;
+            
+            if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $targetPath)) {
+                $profile_image_path = $targetPath;
+            } else {
+                $error_msg = "Failed to upload image.";
+            }
+        } else {
+            $error_msg = "Invalid file type. Only JPG, PNG, GIF allowed.";
+        }
+    }
+
+    if (empty($error_msg)) {
+        $conn->begin_transaction();
+        try {
+            // Update users table
+            $updateUserQuery = "UPDATE users SET name = ?, phone = ?, profile_image = ?, dob = ?, address = ? WHERE id = ?";
+            executeQuery($updateUserQuery, [$name, $phone, $profile_image_path, $dob, $address, $user_id], 'sssssi');
+            $_SESSION['user_name'] = $name;
+            $_SESSION['user_phone'] = $phone;
+
+            // Update mechanics table
+            $updateMechanicQuery = "UPDATE mechanics SET specialization = ?, years_experience = ? WHERE user_id = ?";
+            executeQuery($updateMechanicQuery, [$specialization, $experience, $user_id], 'sii');
+
+            $conn->commit();
+            $success_msg = "Profile updated successfully!";
+            
+            // Refresh mechanic data
+            $mechanicRes = executeQuery($mechanicQuery, [$user_id], 'i');
+            $mechanic = $mechanicRes->fetch_assoc();
+        } catch (Exception $e) {
+            $conn->rollback();
+            $error_msg = "Error updating profile: " . $e->getMessage();
+        }
     }
 }
 
@@ -102,6 +142,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             // Insert service update
             $insertUpdateQuery = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, ?, ?, ?, ?)";
             executeQuery($insertUpdateQuery, [$booking_id, $finalStatus, $finalMsg, 100, $user_id], 'issii');
+
+            // Notify Driver (if pickup/delivery exists)
+            if ($hasPickupDelivery) {
+                // Find assigned driver for delivery (simplified: notify all available drivers or specific one if logic existed)
+                // For now, notify Admin as they manage logistics
+                $adminRes = $conn->query("SELECT id FROM users WHERE role = 'admin'");
+                while ($admin = $adminRes->fetch_assoc()) {
+                     executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'Service Completed', 'Mechanic has completed service for Booking #$booking_id. Ready for delivery.', 'general')", [$admin['id']], 'i');
+                }
+            } else {
+                 // Notify Customer directly if no delivery
+                 $custQuery = "SELECT user_id FROM bookings WHERE id = ?";
+                 $custRes = executeQuery($custQuery, [$booking_id], 'i');
+                 if ($cust = $custRes->fetch_assoc()) {
+                     $notifMsg = "Your vehicle service is complete and ready for pickup!";
+                     executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'Service Completed', ?, 'general')", [$cust['user_id'], $notifMsg], 'is');
+                 }
+            }
 
             // Make mechanic available
             executeQuery("UPDATE mechanics SET is_available = TRUE WHERE id = ?", [$mechanic['id']], 'i');
@@ -263,6 +321,11 @@ $page_title = 'Mechanic Dashboard';
                 <?php endif; ?>
 
                 <?php if ($activeTab === 'jobs'): ?>
+                    <!-- Welcome Message - Only show on jobs tab -->
+                    <div class="mb-6">
+                        <h1 class="text-2xl font-bold">Welcome back, <?php echo htmlspecialchars($mechanic['name'] ?? $_SESSION['user_name'] ?? 'User', ENT_QUOTES, 'UTF-8'); ?>! 👋</h1>
+                        <p class="text-gray-600">Here's your job overview for today.</p>
+                    </div>
                     <!-- Jobs Section with Tabs -->
 
                     <!-- Sub-tabs for Active and Available - Styled as Buttons per User Request -->
@@ -282,9 +345,6 @@ $page_title = 'Mechanic Dashboard';
                                     <?php echo count($availableJobs); ?>
                                 </span>
                             <?php endif; ?>
-                        </a>
-                        <a href="?tab=leave" class="relative btn <?php echo ($activeTab === 'leave') ? 'btn-primary px-8 py-3 rounded-xl shadow-lg shadow-blue-500/20' : 'btn-outline px-8 py-3 rounded-xl bg-white'; ?>" style="position: relative;">
-                            <i class="fa-solid fa-calendar-minus mr-2"></i> Leave Requests
                         </a>
                     </div>
 
@@ -465,10 +525,17 @@ $page_title = 'Mechanic Dashboard';
 
                 <?php elseif ($activeTab === 'history'): ?>
                     <!-- History Section -->
-                    <div class="flex justify-between items-center mb-8">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                         <div>
                             <h1 class="text-3xl font-bold text-gray-900">Work History</h1>
                             <p class="text-muted">Tracking your professional service journey.</p>
+                        </div>
+                        <div class="px-6 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
+                            <i class="fa-solid fa-clipboard-check text-primary"></i>
+                            <div>
+                                <span class="text-lg font-black text-gray-900"><?php echo count($history); ?></span>
+                                <span class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-tighter">Completed Jobs</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -521,85 +588,127 @@ $page_title = 'Mechanic Dashboard';
                     <!-- ... existing leave section remains same ... -->
                     <!-- Leave Requests Section -->
                     <div class="flex flex-col lg:flex-row gap-8">
-                        <!-- Submission Form -->
+                        <!-- Submission Form Section -->
                         <div class="lg:w-1/3">
-                            <div class="card p-8 sticky top-8">
-                                <h3 class="text-2xl font-black text-gray-900 mb-6">Request Leave</h3>
-                                <form id="leaveRequestForm" class="flex flex-col gap-6">
-                                    <input type="hidden" name="action" value="request">
-                                    <div class="form-group flex flex-col gap-2">
-                                        <label class="text-xs font-black uppercase text-gray-500 ml-1">Type of Leave</label>
-                                        <select name="leave_type" class="form-control h-12 px-4 font-bold rounded-xl" required>
-                                            <option value="sick">Sick Leave</option>
-                                            <option value="casual">Casual Leave</option>
-                                            <option value="emergency">Emergency</option>
-                                            <option value="other">Other</option>
-                                        </select>
-                                    </div>
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div class="form-group flex flex-col gap-2">
-                                            <label class="text-xs font-black uppercase text-gray-500 ml-1">Start Date</label>
-                                            <input type="date" name="start_date" class="form-control h-12 px-4 font-bold rounded-xl" required min="<?php echo date('Y-m-d'); ?>">
+                            <div id="leaveFormSection" class="hidden animate-fade-in">
+                                <div class="card p-5 sticky top-8">
+                                    <h3 class="text-lg font-black text-gray-900 mb-4 font-primary border-b border-gray-100 pb-3">Request Leave</h3>
+                                    <form id="leaveRequestForm" class="flex flex-col gap-4">
+                                        <input type="hidden" name="action" value="request">
+                                        <div class="form-group flex flex-col gap-1.5">
+                                            <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">Type of Leave</label>
+                                            <select name="leave_type" class="form-control h-8 px-3 text-[11px] font-bold rounded-lg border-gray-200" required>
+                                                <option value="sick">Sick Leave</option>
+                                                <option value="casual">Casual Leave</option>
+                                                <option value="emergency">Emergency</option>
+                                                <option value="other">Other</option>
+                                            </select>
                                         </div>
-                                        <div class="form-group flex flex-col gap-2">
-                                            <label class="text-xs font-black uppercase text-gray-500 ml-1">End Date</label>
-                                            <input type="date" name="end_date" class="form-control h-12 px-4 font-bold rounded-xl" required min="<?php echo date('Y-m-d'); ?>">
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div class="form-group flex flex-col gap-1.5">
+                                                <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">Start Date</label>
+                                                <input type="date" name="start_date" class="form-control h-8 px-3 text-[11px] font-bold rounded-lg border-gray-200" required min="<?php echo date('Y-m-d'); ?>">
+                                            </div>
+                                            <div class="form-group flex flex-col gap-1.5">
+                                                <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">End Date</label>
+                                                <input type="date" name="end_date" class="form-control h-8 px-3 text-[11px] font-bold rounded-lg border-gray-200" required min="<?php echo date('Y-m-d'); ?>">
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="form-group flex flex-col gap-2">
-                                        <div class="flex justify-between items-center ml-1">
-                                            <label class="text-xs font-black uppercase text-gray-500">Reason</label>
-                                            <span id="reasonCount" class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">0 / 500</span>
+                                        <div class="form-group flex flex-col gap-1.5">
+                                            <div class="flex justify-between items-center ml-1">
+                                                <label class="text-[9px] font-black uppercase text-gray-400 tracking-widest">Reason</label>
+                                                <span id="reasonCount" class="text-[9px] font-black text-gray-300 uppercase">0 / 500</span>
+                                            </div>
+                                            <textarea id="leaveReason" name="reason" class="form-control p-3 font-medium text-[11px] rounded-lg h-24 resize-none border-gray-200 focus:border-primary transition-all outline-none" placeholder="Reason for leave..." required minlength="3" maxlength="500"></textarea>
+                                            <div id="validationMsg" class="hidden animate-fade-in">
+                                                <p class="text-[10px] text-[#db4437] font-bold mt-1 flex items-center gap-1">
+                                                    <i class="fa-solid fa-circle-exclamation text-[8px]"></i>
+                                                    Please provide a brief reason.
+                                                </p>
+                                            </div>
                                         </div>
-                                        <textarea id="leaveReason" name="reason" class="form-control p-4 font-normal text-sm rounded-xl h-32 resize-none border-2 border-gray-100 focus:border-primary transition-all outline-none" placeholder="Briefly explain your reason (min 15 chars)..." required minlength="15" maxlength="500"></textarea>
-                                        <p id="validationMsg" class="text-[11px] text-red-500 hidden px-1 font-medium italic mt-1">Reason must be at least 15 characters.</p>
-                                    </div>
-                                    <button type="submit" class="btn btn-primary h-11 font-black text-sm rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all uppercase tracking-widest">
-                                        Submit Request
-                                    </button>
-                                </form>
+                                        <div class="flex gap-2 pt-2 border-t border-gray-50 mt-1">
+                                            <button type="submit" class="btn btn-primary flex-1 h-8 font-black text-[10px] rounded-lg uppercase tracking-wider">
+                                                Submit Request
+                                            </button>
+                                            <button type="button" onclick="toggleLeaveForm()" class="btn btn-outline h-8 px-4 font-bold text-[10px] rounded-lg uppercase">Cancel</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div id="leavePromptSection" class="animate-fade-in pt-4">
+                                <button onclick="toggleLeaveForm()" class="btn btn-primary w-full h-12 rounded-xl shadow-lg shadow-blue-500/20 flex items-center justify-center gap-3 font-black text-sm uppercase tracking-widest active:scale-[0.98] transition-all">
+                                    <i class="fa-solid fa-calendar-plus text-lg"></i>
+                                    Apply for Leave
+                                </button>
                             </div>
                         </div>
 
                         <!-- Requests History -->
                         <div class="lg:w-2/3">
                             <h3 class="text-2xl font-black text-gray-900 mb-6">My Leave History</h3>
-                            <div class="grid grid-cols-1 gap-6">
-                                <?php if (empty($leaveRequests)): ?>
-                                    <div class="card p-12 text-center text-muted border-dashed bg-gray-50/50">
-                                        <i class="fa-solid fa-calendar-xmark text-5xl mb-4 opacity-20"></i>
-                                        <p class="font-bold">No leave requests found.</p>
-                                    </div>
-                                <?php else: ?>
-                                    <?php foreach ($leaveRequests as $lr): ?>
-                                        <div class="card p-6 hover:shadow-xl transition-all border-l-4 <?php 
-                                            echo $lr['status'] === 'approved' ? 'border-green-500' : ($lr['status'] === 'rejected' ? 'border-red-500' : 'border-yellow-500'); 
-                                        ?>">
-                                            <div class="flex flex-col md:flex-row justify-between gap-4 mb-4">
-                                                <div>
-                                                    <span class="text-[10px] uppercase font-black tracking-widest text-primary mb-1 block"><?php echo $lr['leave_type']; ?> Leave</span>
-                                                    <h4 class="text-xl font-black text-gray-900">
-                                                        <?php echo date('M d', strtotime($lr['start_date'])); ?> - <?php echo date('M d, Y', strtotime($lr['end_date'])); ?>
-                                                    </h4>
-                                                </div>
-                                                <div class="flex items-center gap-3">
-                                                    <span class="badge <?php 
-                                                        echo $lr['status'] === 'approved' ? 'badge-success' : ($lr['status'] === 'rejected' ? 'badge-danger' : 'badge-warning'); 
-                                                    ?> px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                                                        <?php echo $lr['status']; ?>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <p class="text-gray-600 font-medium text-sm mb-4"><?php echo htmlspecialchars($lr['reason']); ?></p>
-                                            <?php if ($lr['admin_comment']): ?>
-                                                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                                    <span class="text-[9px] uppercase font-black text-gray-400 mb-1 block">Admin Comment</span>
-                                                    <p class="text-sm font-bold text-gray-800 italic">"<?php echo htmlspecialchars($lr['admin_comment']); ?>"</p>
-                                                </div>
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-left">
+                                        <thead>
+                                            <tr class="bg-gray-50 border-b border-gray-100">
+                                                <th rowspan="2" class="px-4 py-3 font-bold text-gray-700 w-16 text-center border-r border-gray-100">Sl.No</th>
+                                                <th colspan="2" class="px-4 py-2 font-bold text-gray-700 text-center border-b border-gray-100">Leave date</th>
+                                                <th rowspan="2" class="px-4 py-3 font-bold text-gray-700 whitespace-nowrap text-center border-l border-gray-100">Applied On</th>
+                                                <th rowspan="2" class="px-4 py-3 font-bold text-gray-700 text-center">Type</th>
+                                                <th rowspan="2" class="px-4 py-3 font-bold text-gray-700 text-center">Reason</th>
+                                                <th rowspan="2" class="px-4 py-3 font-bold text-gray-700 text-center">Status</th>
+                                                <th rowspan="2" class="px-4 py-3 font-bold text-gray-700 text-center">Comments</th>
+                                            </tr>
+                                            <tr class="bg-gray-50 border-b border-gray-100">
+                                                <th class="px-4 py-2 text-[10px] font-bold text-gray-500 text-center border-r border-gray-100">Start</th>
+                                                <th class="px-4 py-2 text-[10px] font-bold text-gray-500 text-center">End</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-gray-100">
+                                            <?php if (empty($leaveRequests)): ?>
+                                                <tr>
+                                                    <td colspan="8" class="px-4 py-10 text-center text-gray-500 italic">
+                                                        No leave requests found.
+                                                    </td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php foreach ($leaveRequests as $index => $lr): ?>
+                                                    <tr class="hover:bg-gray-50 transition-colors">
+                                                        <td class="px-4 py-4 text-gray-500 text-center"><?php echo $index + 1; ?>.</td>
+                                                        <td class="px-4 py-4 font-medium text-gray-900 whitespace-nowrap text-center">
+                                                            <?php echo date('Y-m-d', strtotime($lr['start_date'])); ?>
+                                                        </td>
+                                                        <td class="px-4 py-4 font-medium text-gray-900 whitespace-nowrap text-center border-l border-gray-50">
+                                                            <?php echo date('Y-m-d', strtotime($lr['end_date'])); ?>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-gray-600 whitespace-nowrap text-center">
+                                                            <?php echo date('Y-m-d H:i', strtotime($lr['created_at'])); ?>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-gray-700 capitalize text-center">
+                                                            <?php echo htmlspecialchars($lr['leave_type']); ?>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-gray-600 min-w-[200px] text-center">
+                                                            <?php echo htmlspecialchars($lr['reason']); ?>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-center">
+                                                            <span class="font-black tracking-wide uppercase text-[11px]" style="color: <?php 
+                                                                $status_val = strtolower(trim($lr['status']));
+                                                                echo ($status_val === 'approved') ? '#16a34a' : ($status_val === 'rejected' ? '#dc2626' : '#f59e0b'); 
+                                                            ?> !important;">
+                                                                <?php echo htmlspecialchars($lr['status']); ?>
+                                                            </span>
+                                                        </td>
+                                                        <td class="px-4 py-4 text-gray-500 text-center">
+                                                            <?php echo $lr['admin_comment'] ? htmlspecialchars($lr['admin_comment']) : 'Nil'; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
                                             <?php endif; ?>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -613,16 +722,28 @@ $page_title = 'Mechanic Dashboard';
                             const length = reasonInput.value.length;
                             reasonCount.textContent = `${length} / 500`;
                             
-                            if (length > 0 && length < 15) {
+                            if (length > 0 && length < 3) {
                                 validationMsg.classList.remove('hidden');
-                                reasonInput.classList.add('border-red-500');
-                                reasonCount.classList.add('text-red-500');
+                                reasonInput.style.borderColor = '#db4437';
+                                reasonCount.style.color = '#db4437';
                             } else {
                                 validationMsg.classList.add('hidden');
-                                reasonInput.classList.remove('border-red-500');
-                                reasonCount.classList.remove('text-red-500');
+                                reasonInput.style.borderColor = '';
+                                reasonCount.style.color = '';
                             }
                         });
+
+                        function toggleLeaveForm() {
+                            const form = document.getElementById('leaveFormSection');
+                            const prompt = document.getElementById('leavePromptSection');
+                            if (form.classList.contains('hidden')) {
+                                form.classList.remove('hidden');
+                                prompt.classList.add('hidden');
+                            } else {
+                                form.classList.add('hidden');
+                                prompt.classList.remove('hidden');
+                            }
+                        }
 
                         document.getElementById('leaveRequestForm').addEventListener('submit', async (e) => {
                             e.preventDefault();
@@ -649,60 +770,110 @@ $page_title = 'Mechanic Dashboard';
                         });
                     </script>
                 <?php elseif ($activeTab === 'profile'): ?>
-                    <!-- Minimalist Profile Identity Section -->
-                    <div class="max-w-md mx-auto animate-fade-in pt-4">
-                        <div class="glass-card border-none shadow-xl overflow-hidden">
-                            <div class="px-6 py-8 flex flex-col items-center text-center">
-                                <div class="relative mb-4 group">
-                                    <?php if ($mechanic['profile_image']): ?>
-                                        <img src="uploads/profiles/<?php echo htmlspecialchars($mechanic['profile_image']); ?>" 
-                                             class="w-20 h-20 rounded-2xl object-cover shadow-lg border-4 border-white" alt="Profile">
-                                    <?php else: ?>
-                                        <div class="w-20 h-20 rounded-2xl bg-primary bg-gradient-to-br from-primary to-blue-700 flex items-center justify-center text-white shadow-lg border-4 border-white">
-                                            <span class="text-3xl font-black tracking-tighter">P</span>
-                                        </div>
-                                    <?php endif; ?>
-                                    <div class="absolute -bottom-1 -right-1 w-7 h-7 bg-green-500 text-white rounded-xl flex items-center justify-center shadow-lg border-2 border-white text-[10px]">
-                                        <i class="fa-solid fa-check"></i>
-                                    </div>
+                    <!-- Modern Profile Redesign -->
+                    <div class="animate-fade-in pt-6 pb-12">
+                        
+                        <?php 
+                        // Check for missing details
+                        $missingDetails = [];
+                        if (empty($mechanic['phone']) || $mechanic['phone'] == 'N/A') $missingDetails[] = "Phone Number";
+                        if (empty($mechanic['specialization']) || $mechanic['specialization'] == 'General Mechanic') $missingDetails[] = "Specialization";
+                        
+                        if (!empty($missingDetails)): 
+                        ?>
+                            <div class="profile-alert max-w-lg mx-auto shadow-sm">
+                                <i class="fa-solid fa-circle-exclamation text-blue-600"></i>
+                                <div>
+                                    <h4 class="font-bold text-blue-800 text-sm mb-1">Complete Your Profile</h4>
+                                    <p class="text-xs text-blue-600 leading-relaxed">
+                                        Please add your <strong><?php echo implode(' and ', $missingDetails); ?></strong> to verify your account and start receiving specialized job requests.
+                                    </p>
                                 </div>
-                                <h3 class="text-xl font-bold text-gray-900 mb-1"><?php echo htmlspecialchars($mechanic['name']); ?></h3>
-                                <div class="flex items-center gap-2 mb-6">
-                                    <span class="badge badge-primary px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider">Mechanic</span>
-                                    <span class="badge badge-white px-2 py-0.5 rounded-md text-[9px] font-bold text-muted border border-gray-100 uppercase tracking-wider"><?php echo htmlspecialchars($mechanic['specialization'] ?? 'Specialist'); ?></span>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="profile-card">
+                            <form method="POST" enctype="multipart/form-data">
+                                <div class="profile-avatar-container">
+                                    <?php 
+                                        $displayImage = !empty($mechanic['profile_image']) ? $mechanic['profile_image'] : 'assets/img/default-avatar.png';
+                                    ?>
+                                    <img src="<?php echo htmlspecialchars($displayImage); ?>" alt="Profile" class="profile-avatar" id="avatarPreview">
+                                    <label for="profile_upload" class="edit-avatar-btn" title="Change Photo">
+                                        <i class="fa-solid fa-pencil"></i>
+                                    </label>
+                                    <input type="file" name="profile_image" id="profile_upload" class="hidden" accept="image/*" onchange="previewImage(this)">
                                 </div>
 
-                                <form method="POST" class="w-full flex flex-col gap-4">
-                                    <div class="form-group text-left">
-                                        <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-[0.1em] mb-1.5 block">Full Name</label>
-                                        <input type="text" name="name" class="form-control h-10 px-4 text-xs font-bold bg-gray-50/50 border-gray-100 focus:border-primary focus:bg-white transition-all rounded-xl" value="<?php echo htmlspecialchars($mechanic['name']); ?>" required>
+                                <h2 class="text-xl font-black text-gray-900 mb-1"><?php echo htmlspecialchars($mechanic['name']); ?></h2>
+                                <p class="text-xs font-bold text-muted uppercase tracking-wider mb-8">Certified Mechanic</p>
+
+                                <div class="text-left">
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Full Name</label>
+                                        <input type="text" name="name" class="input-modern" value="<?php echo htmlspecialchars($mechanic['name']); ?>" required>
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">
+                                            Email Address 
+                                            <span class="verified-badge"><i class="fa-solid fa-check"></i> Verified</span>
+                                        </label>
+                                        <input type="email" class="input-modern" value="<?php echo htmlspecialchars($mechanic['email'] ?? 'No Email'); ?>" disabled>
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Phone Number</label>
+                                        <input type="tel" name="phone" class="input-modern" value="<?php echo htmlspecialchars($mechanic['phone'] ?? ''); ?>" placeholder="Enter phone number" required>
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Date of Birth</label>
+                                        <input type="date" name="dob" class="input-modern" value="<?php echo htmlspecialchars($mechanic['dob'] ?? ''); ?>">
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Home Address</label>
+                                        <textarea name="address" class="input-modern" style="min-height: 100px; resize: vertical;" placeholder="Enter your full address"><?php echo htmlspecialchars($mechanic['address'] ?? ''); ?></textarea>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="input-group-modern">
+                                            <label class="input-label-modern">Specialization</label>
+                                            <input type="text" name="specialization" class="input-modern" value="<?php echo htmlspecialchars($mechanic['specialization'] ?? ''); ?>" placeholder="e.g. Engine Specialist">
+                                        </div>
+                                        <div class="input-group-modern">
+                                            <label class="input-label-modern">Experience (Yrs)</label>
+                                            <input type="number" name="years_experience" class="input-modern" value="<?php echo htmlspecialchars($mechanic['years_experience'] ?? ''); ?>" placeholder="Years" disabled>
+                                        </div>
                                     </div>
                                     
-                                    <div class="grid grid-cols-2 gap-4 text-left">
-                                        <div class="form-group">
-                                            <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-[0.1em] mb-1.5 block">Phone Number</label>
-                                            <div class="h-10 px-4 flex items-center text-xs font-bold bg-gray-50 border border-gray-100 rounded-xl text-gray-400">
-                                                <?php echo htmlspecialchars($mechanic['phone'] ?? 'N/A'); ?>
-                                            </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-[0.1em] mb-1.5 block">Experience</label>
-                                            <div class="h-10 px-4 flex items-center text-xs font-bold bg-gray-50 border border-gray-100 rounded-xl text-gray-400">
-                                                <?php echo htmlspecialchars($mechanic['years_experience'] ?? '0'); ?> Years
-                                            </div>
-                                        </div>
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Country</label>
+                                        <select class="input-modern">
+                                            <option>India</option>
+                                        </select>
                                     </div>
+                                </div>
 
-                                    <div class="pt-4">
-                                        <button type="submit" name="update_profile" class="btn btn-primary w-full h-11 text-[10px] font-black shadow-lg shadow-blue-500/10 rounded-xl transition-all active:scale-[0.98] uppercase tracking-[0.2em] group">
-                                            <i class="fa-solid fa-check-circle mr-2 group-hover:scale-110 transition-transform"></i> Save Updates
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
+                                <button type="submit" name="update_profile" class="btn-save-profile">
+                                    Save Changes
+                                </button>
+                            </form>
                         </div>
-                        <p class="mt-4 text-[9px] text-muted font-bold text-center uppercase tracking-widest opacity-40">Professional Profile Verified</p>
                     </div>
+
+                    <script>
+                        function previewImage(input) {
+                            if (input.files && input.files[0]) {
+                                var reader = new FileReader();
+                                reader.onload = function(e) {
+                                    document.getElementById('avatarPreview').src = e.target.result;
+                                }
+                                reader.readAsDataURL(input.files[0]);
+                            }
+                        }
+                    </script>
                 <?php endif; ?>
             </div>
         </main>
@@ -922,5 +1093,7 @@ $page_title = 'Mechanic Dashboard';
             }
         }
     </script>
+<script src="assets/js/message-admin.js"></script>
+<script src="assets/js/profile-validation.js"></script>
 </body>
 </html>

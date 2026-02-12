@@ -2,6 +2,7 @@
 require_once 'includes/auth.php';
 require_once 'config/db.php';
 require_once 'includes/functions.php';
+require_once 'includes/notification_helper.php';
 
 // Require admin access
 requireAdmin();
@@ -23,9 +24,11 @@ $completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE (status = '
 $completedTodayResult = executeQuery($completedTodayQuery, [], '');
 $completedToday = ($completedTodayResult && $row = $completedTodayResult->fetch_assoc()) ? $row['count'] : 0;
 
-$activeDriversQuery = "SELECT COUNT(DISTINCT driver_user_id) as count FROM pickup_delivery WHERE status IN ('in_transit', 'scheduled')";
-$activeDriversResult = executeQuery($activeDriversQuery, [], '');
-$activeDrivers = ($activeDriversResult && $row = $activeDriversResult->fetch_assoc()) ? $row['count'] : 0;
+$activeWorkersQuery = "SELECT 
+    (SELECT COUNT(*) FROM mechanics m JOIN users u ON m.user_id = u.id WHERE m.is_available = TRUE) + 
+    (SELECT COUNT(*) FROM drivers d JOIN users u ON d.user_id = u.id WHERE d.is_available = TRUE) as count";
+$activeWorkersResult = executeQuery($activeWorkersQuery, [], '');
+$activeWorkers = ($activeWorkersResult && $row = $activeWorkersResult->fetch_assoc()) ? $row['count'] : 0;
 
 // Fetch all bookings with related data
 $bookingsQuery = "SELECT 
@@ -107,9 +110,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $conn->prepare("UPDATE mechanics SET is_available = FALSE WHERE id = ?");
             $stmt->bind_param("i", $mechanic_id);
             $stmt->execute();
+            
+            // Get mechanic user_id for notification
+            $mechanicRes = $conn->query("SELECT user_id FROM mechanics WHERE id = $mechanic_id");
+            if ($mechanicRow = $mechanicRes->fetch_assoc()) {
+                // Send notification to mechanic using helper
+                notifyWorker(
+                    $mechanicRow['user_id'],
+                    "🔧 New Job Assigned",
+                    "You have been assigned a new repair job. Check your dashboard for details.",
+                    'assignment'
+                );
+            }
 
             $conn->commit();
             $successMessage = "Mechanic assigned successfully!";
+            
+            // Send notification to customer
+            $customerQuery = "SELECT user_id FROM bookings WHERE id = ?";
+            $customerResult = $conn->query("SELECT user_id FROM bookings WHERE id = $booking_id");
+            if ($customerRow = $customerResult->fetch_assoc()) {
+                notifyCustomer(
+                    $customerRow['user_id'],
+                    "🔧 Mechanic Assigned",
+                    "A mechanic has been assigned to your vehicle. Repair work will begin soon.",
+                    'booking'
+                );
+            }
         } catch (Exception $e) {
             $conn->rollback();
         }
@@ -137,6 +164,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $conn->prepare("UPDATE drivers SET is_available = FALSE WHERE user_id = ?");
             $stmt->bind_param("i", $driver_user_id);
             $stmt->execute();
+            
+            // Send notification to driver using helper
+            notifyWorker(
+                $driver_user_id,
+                "🚗 New Job Assigned",
+                "You have been assigned a new pickup/delivery job. Check your dashboard for details.",
+                'assignment'
+            );
 
             $conn->commit();
             $successMessage = "Driver assigned successfully!";
@@ -168,6 +203,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <h1 class="text-2xl font-bold">Manage Bookings</h1>
                         <p class="text-muted">View and manage all service requests, assignments, and statuses.</p>
                     </div>
+                    <a href="admin_income_report.php" class="btn btn-primary flex items-center gap-2 px-6 py-2.5 rounded-xl shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
+                        <i class="fa-solid fa-file-invoice-dollar"></i>
+                        <span class="font-bold text-sm tracking-wide">Generate Income Report</span>
+                    </a>
                 </div>
 
                 <?php if (isset($successMessage) && $successMessage): ?>
@@ -216,10 +255,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              <div>
                                  <span class="opacity-80 text-sm font-medium">Active Workers</span>
                                  <div class="flex items-end gap-2 mt-1">
-                                     <span class="text-3xl font-bold"><?php echo $activeDrivers; ?></span>
+                                     <span class="text-3xl font-bold"><?php echo $activeWorkers; ?></span>
                                  </div>
                              </div>
-                             <span class="opacity-50 text-xl"><i class="fa-solid fa-truck"></i></span>
+                             <span class="opacity-50 text-xl"><i class="fa-solid fa-user-check"></i></span>
                           </div>
                      </div>
                 </div>

@@ -41,6 +41,13 @@ $isDriver = $userRole === 'driver';
             <a href="admin_leave_management.php" class="nav-item <?php echo ($current_page == 'admin_leave_management.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-calendar-minus"></i> Leave Requests
             </a>
+            <a href="admin_income_report.php" class="nav-item <?php echo ($current_page == 'admin_income_report.php') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-file-invoice-dollar"></i> Income Report
+            </a>
+
+            <a href="messages.php" class="nav-item <?php echo ($current_page == 'messages.php') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-envelope"></i> Messages
+            </a>
         <?php elseif ($isMechanic): ?>
             <!-- Mechanic Navigation -->
             <a href="mechanic_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'jobs') ? 'active' : ''; ?>">
@@ -55,6 +62,9 @@ $isDriver = $userRole === 'driver';
             <a href="mechanic_dashboard.php?tab=leave" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'leave') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-calendar-minus"></i> Request Leave
             </a>
+            <a href="messages.php" class="nav-item <?php echo ($current_page == 'messages.php') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-envelope"></i> Messages
+            </a>
         <?php elseif ($isDriver): ?>
             <!-- Driver Navigation -->
             <a href="driver_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? 'jobs') == 'jobs') ? 'active' : ''; ?>">
@@ -68,6 +78,9 @@ $isDriver = $userRole === 'driver';
             </a>
             <a href="driver_dashboard.php?tab=leave" class="nav-item <?php echo ($current_page == 'driver_dashboard.php' && ($activeTab ?? '') == 'leave') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-calendar-minus"></i> Request Leave
+            </a>
+            <a href="messages.php" class="nav-item <?php echo ($current_page == 'messages.php') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-envelope"></i> Messages
             </a>
         <?php else: ?>
             <!-- Customer Navigation -->
@@ -98,4 +111,3 @@ $isDriver = $userRole === 'driver';
         </a>
     </div>
 </aside>
-

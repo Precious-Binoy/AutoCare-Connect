@@ -43,8 +43,8 @@ if ($method === 'POST') {
         }
 
         // Validation for reason length
-        if (strlen(trim($reason)) < 15) {
-            echo json_encode(['success' => false, 'message' => 'Reason must be at least 15 characters long']);
+        if (strlen(trim($reason)) < 3) {
+            echo json_encode(['success' => false, 'message' => 'Reason must be at least 3 characters long']);
             exit;
         }
 
@@ -55,6 +55,23 @@ if ($method === 'POST') {
         
         $query = "INSERT INTO leave_requests (user_id, leave_type, start_date, end_date, reason) VALUES (?, ?, ?, ?, ?)";
         if (executeQuery($query, [$userId, $type, $start, $end, $reason], 'issss')) {
+            // Send notification to admin
+            $userQuery = "SELECT name, role FROM users WHERE id = ?";
+            $userResult = executeQuery($userQuery, [$userId], 'i');
+            if ($userRow = $userResult->fetch_assoc()) {
+                // Get all admin users
+                $adminQuery = "SELECT id FROM users WHERE role = 'admin'";
+                $adminResult = executeQuery($adminQuery);
+                
+                $notifTitle = "📋 New Leave Request";
+                $notifMessage = "{$userRow['name']} ({$userRow['role']}) has requested {$type} leave from {$start} to {$end}.";
+                
+                while ($adminRow = $adminResult->fetch_assoc()) {
+                    $notifQuery = "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'general')";
+                    executeQuery($notifQuery, [$adminRow['id'], $notifTitle, $notifMessage], 'iss');
+                }
+            }
+            
             echo json_encode(['success' => true, 'message' => 'Leave request submitted successfully']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Failed to submit leave request']);
@@ -78,6 +95,24 @@ if ($method === 'POST') {
         
         $query = "UPDATE leave_requests SET status = ?, admin_comment = ? WHERE id = ?";
         if (executeQuery($query, [$status, $adminComment, $leaveId], 'ssi')) {
+            // Get leave request details to send notification
+            $leaveQuery = "SELECT lr.user_id, lr.leave_type, u.name 
+                          FROM leave_requests lr 
+                          JOIN users u ON lr.user_id = u.id 
+                          WHERE lr.id = ?";
+            $leaveResult = executeQuery($leaveQuery, [$leaveId], 'i');
+            
+            if ($leaveResult && $leaveRow = $leaveResult->fetch_assoc()) {
+                $notifTitle = $status === 'approved' ? '✅ Leave Request Approved' : '❌ Leave Request Rejected';
+                $notifMessage = $status === 'approved' 
+                    ? "Your {$leaveRow['leave_type']} leave request has been approved by the admin."
+                    : "Your {$leaveRow['leave_type']} leave request has been rejected. " . ($adminComment ? "Reason: $adminComment" : '');
+                
+                // Insert notification
+                $notifQuery = "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'general')";
+                executeQuery($notifQuery, [$leaveRow['user_id'], $notifTitle, $notifMessage], 'iss');
+            }
+            
             echo json_encode(['success' => true, 'message' => 'Leave request updated successfully']);
         } else {
             echo json_encode(['success' => false, 'message' => 'Failed to update leave request']);

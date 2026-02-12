@@ -9,6 +9,7 @@
  * @return string
  */
 function sanitizeInput($data) {
+    if ($data === null) return '';
     return htmlspecialchars(strip_tags(trim($data)), ENT_QUOTES, 'UTF-8');
 }
 

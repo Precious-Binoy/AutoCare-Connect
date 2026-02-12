@@ -39,10 +39,10 @@ if ($leavesResult) {
             <?php include 'includes/header.php'; ?>
             
             <div class="page-content">
-                <div class="flex justify-between items-center mb-8">
+                <div class="flex justify-between items-center mb-6">
                     <div>
-                        <h1 class="text-3xl font-black text-gray-900">Personnel Leave Management</h1>
-                        <p class="text-muted font-medium">Review and process leave requests from mechanics and drivers.</p>
+                        <h1 class="text-2xl font-bold text-gray-900">Personnel Leave Management</h1>
+                        <p class="text-muted">Review and process leave requests from mechanics and drivers.</p>
                     </div>
                 </div>
 
@@ -83,8 +83,10 @@ if ($leavesResult) {
                                                 </div>
                                             </td>
                                             <td class="p-6">
-                                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider <?php echo $lr['user_role'] === 'mechanic' ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'bg-blue-50 text-blue-600 border border-blue-100'; ?>">
-                                                    <?php echo $lr['user_role']; ?>
+                                                <span class="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider <?php 
+                                                    echo strtolower($lr['user_role']) === 'mechanic' ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'bg-blue-50 text-blue-600 border border-blue-100'; 
+                                                ?>">
+                                                    <?php echo htmlspecialchars($lr['user_role'] ?? ''); ?>
                                                 </span>
                                             </td>
                                             <td class="p-6">
@@ -106,9 +108,10 @@ if ($leavesResult) {
                                             </td>
                                             <td class="p-6">
                                                 <span class="badge <?php 
-                                                    echo $lr['status'] === 'approved' ? 'badge-success' : ($lr['status'] === 'rejected' ? 'badge-danger' : 'badge-warning'); 
+                                                    $s = strtolower(trim($lr['status']));
+                                                    echo $s === 'approved' ? 'badge-success' : ($s === 'rejected' ? 'badge-danger' : 'badge-warning'); 
                                                 ?> px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
-                                                    <?php echo $lr['status']; ?>
+                                                    <?php echo htmlspecialchars($lr['status']); ?>
                                                 </span>
                                             </td>
                                             <td class="p-6 text-right">

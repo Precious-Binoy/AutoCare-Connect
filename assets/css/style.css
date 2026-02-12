@@ -68,8 +68,160 @@
 }
 
 /* Utilities */
-.hidden {
-    display: none !important;
+
+/* Modern Profile Card Design */
+.profile-card {
+    background: white;
+    border-radius: 24px;
+    padding: 2rem;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+    /* Soft shadow */
+    max-width: 500px;
+    margin: 0 auto;
+    text-align: center;
+    position: relative;
+    border: 1px solid white;
+}
+
+/* Avatar Container */
+.profile-avatar-container {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: -50px auto 20px;
+    /* Pull up slightly */
+    border-radius: 50%;
+    padding: 4px;
+    background: white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.profile-avatar {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #f1f5f9;
+}
+
+/* Edit Icon Button */
+.edit-avatar-btn {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    border: 2px solid white;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.edit-avatar-btn:hover {
+    transform: scale(1.1);
+    background: var(--primary-dark);
+}
+
+/* Modern Input Fields */
+.input-group-modern {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.input-label-modern {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 8px;
+}
+
+.input-modern {
+    width: 100%;
+    padding: 14px 16px;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-main);
+    transition: all 0.2s;
+}
+
+.input-modern:focus {
+    background: white;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    outline: none;
+}
+
+.input-modern:disabled {
+    background: #F1F5F9;
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* Completion Alert */
+.profile-alert {
+    background: #EFF6FF;
+    border: 1px solid #DBEAFE;
+    color: #1E40AF;
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 30px;
+    text-align: left;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.profile-alert i {
+    font-size: 1.25rem;
+    margin-top: 2px;
+}
+
+/* Verified Badge */
+.verified-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #eff6ff;
+    color: #2563eb;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-left: 8px;
+}
+
+/* Save Button */
+.btn-save-profile {
+    width: 100%;
+    background: var(--primary);
+    color: white;
+    font-weight: 700;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    font-size: 1rem;
+    margin-top: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.btn-save-profile:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
 }
 
 .fixed {
@@ -459,6 +611,65 @@
 
 .bg-rose-50 {
     background-color: #fef2f2 !important;
+}
+
+.bg-orange-50 {
+    background-color: #fff7ed !important;
+}
+
+.bg-amber-50 {
+    background-color: #fffbeb !important;
+}
+
+.text-orange-600 {
+    color: #ea580c !important;
+}
+
+.text-amber-600 {
+    color: #d97706 !important;
+}
+
+.text-green-600 {
+    color: #16a34a !important;
+}
+
+.text-red-600 {
+    color: #dc2626 !important;
+}
+
+.border-orange-100 {
+    border-color: #ffedd5 !important;
+}
+
+.border-amber-100 {
+    border-color: #fef3c7 !important;
+}
+
+/* Badge System */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.badge-success {
+    background-color: #ecfdf5 !important;
+    color: #059669 !important;
+    border: 1px solid #d1fae5 !important;
+}
+
+.badge-danger {
+    background-color: #fef2f2 !important;
+    color: #dc2626 !important;
+    border: 1px solid #fee2e2 !important;
+}
+
+.badge-warning {
+    background-color: #fffbeb !important;
+    color: #d97706 !important;
+    border: 1px solid #fef3c7 !important;
 }
 
 .bg-primary\/5 {

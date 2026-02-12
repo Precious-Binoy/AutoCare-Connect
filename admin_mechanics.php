@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // Fetch all mechanics
 $mechanicsQuery = "SELECT m.id, m.specialization, m.certification, m.years_experience, m.is_available,
-                   u.name, u.email, u.phone
+                   u.name, u.email, u.phone, u.profile_image
                    FROM mechanics m
                    INNER JOIN users u ON m.user_id = u.id
                    ORDER BY u.name ASC";
@@ -160,7 +160,18 @@ if ($mechanicsResult) {
                                 <?php else: ?>
                                     <?php foreach ($mechanics as $mechanic): ?>
                                         <tr style="border-bottom: 1px solid var(--border);">
-                                            <td class="p-4 font-bold"><?php echo htmlspecialchars($mechanic['name']); ?></td>
+                                            <td class="p-4 font-bold">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="avatar bg-primary text-white flex items-center justify-center rounded-lg font-bold w-10 h-10 text-sm overflow-hidden">
+                                                        <?php if (!empty($mechanic['profile_image'])): ?>
+                                                            <img src="<?php echo htmlspecialchars($mechanic['profile_image']); ?>" class="w-full h-full object-cover">
+                                                        <?php else: ?>
+                                                            <?php echo strtoupper(substr($mechanic['name'], 0, 1)); ?>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div><?php echo htmlspecialchars($mechanic['name']); ?></div>
+                                                </div>
+                                            </td>
                                             <td class="p-4"><?php echo htmlspecialchars($mechanic['email']); ?></td>
                                             <td class="p-4"><?php echo htmlspecialchars($mechanic['phone'] ?? 'N/A'); ?></td>
                                             <td class="p-4"><?php echo htmlspecialchars($mechanic['specialization'] ?? 'General'); ?></td>
@@ -171,6 +182,9 @@ if ($mechanicsResult) {
                                                 </span>
                                             </td>
                                             <td class="p-4 text-right">
+                                                <button onclick="viewMechanicDetails(<?php echo $mechanic['id']; ?>)" class="btn btn-sm btn-outline-primary mr-2" title="View Details">
+                                                    View Details
+                                                </button>
                                                 <form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this mechanic?');">
                                                     <input type="hidden" name="action" value="delete_mechanic">
                                                     <input type="hidden" name="mechanic_id" value="<?php echo $mechanic['id']; ?>">
@@ -235,6 +249,28 @@ if ($mechanicsResult) {
         </div>
     </div>
 
+    <!-- Mechanic Details Modal -->
+    <div id="mechanicDetailsModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); z-index: 10000; align-items: center; justify-content: center; padding: 1rem;">
+        <div style="background: white; border-radius: 1.5rem; max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 40px 100px -20px rgba(0,0,0,0.4);">
+            <div class="p-8 border-b border-gray-100">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 class="text-3xl font-black text-gray-900">Mechanic Details</h2>
+                        <p class="text-sm text-muted mt-1">Complete profile and performance overview</p>
+                    </div>
+                    <button onclick="closeMechanicModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <i class="fa-solid fa-xmark text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="mechanicModalContent" class="p-8">
+                <div class="flex items-center justify-center py-20">
+                    <i class="fa-solid fa-circle-notch fa-spin text-primary text-4xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Show modal on click
         document.getElementById('addMechanicModal').addEventListener('click', function(e) {
@@ -246,6 +282,144 @@ if ($mechanicsResult) {
         // Show modal if needed
         const modal = document.getElementById('addMechanicModal');
         modal.style.display = modal.style.display === 'none' ? 'none' : 'flex';
+
+        function viewMechanicDetails(mechanicId) {
+            const modal = document.getElementById('mechanicDetailsModal');
+            const content = document.getElementById('mechanicModalContent');
+            
+            modal.style.display = 'flex';
+            content.innerHTML = '<div class="flex items-center justify-center py-20"><i class="fa-solid fa-circle-notch fa-spin text-primary text-4xl"></i></div>';
+            
+            fetch(`ajax/get_mechanic_details.php?mechanic_id=${mechanicId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderMechanicDetails(data);
+                    } else {
+                        content.innerHTML = `<div class="text-center py-12 text-red-500">${data.error}</div>`;
+                    }
+                })
+                .catch(error => {
+                    content.innerHTML = '<div class="text-center py-12 text-red-500">Error loading mechanic details</div>';
+                });
+        }
+
+        function renderMechanicDetails(data) {
+            const mechanic = data.mechanic;
+            const stats = data.stats;
+            const completionRate = stats.total_jobs > 0 ? (stats.completed_jobs / stats.total_jobs * 100).toFixed(1) : 0;
+            
+            let html = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="card bg-blue-50 border-blue-100">
+                        <div class="text-center">
+                            <i class="fa-solid fa-wrench text-3xl text-blue-600 mb-2"></i>
+                            <div class="text-3xl font-black text-gray-900">${stats.total_jobs}</div>
+                            <div class="text-xs font-bold text-muted uppercase tracking-wider">Total Jobs</div>
+                        </div>
+                    </div>
+                    <div class="card bg-green-50 border-green-100">
+                        <div class="text-center">
+                            <i class="fa-solid fa-check-circle text-3xl text-green-600 mb-2"></i>
+                            <div class="text-3xl font-black text-gray-900">${stats.completed_jobs}</div>
+                            <div class="text-xs font-bold text-muted uppercase tracking-wider">Completed</div>
+                        </div>
+                    </div>
+                    <div class="card bg-purple-50 border-purple-100">
+                        <div class="text-center">
+                            <i class="fa-solid fa-indian-rupee-sign text-3xl text-purple-600 mb-2"></i>
+                            <div class="text-3xl font-black text-gray-900">₹${stats.total_earnings.toFixed(2)}</div>
+                            <div class="text-xs font-bold text-muted uppercase tracking-wider">Total Earnings</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                    <div class="card">
+                        <h3 class="text-lg font-black mb-4 text-gray-900">Personal Information</h3>
+                        <div class="space-y-3">
+                            <div><span class="text-xs font-bold text-muted uppercase block">Name</span><span class="font-bold text-gray-900">${mechanic.name || 'N/A'}</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Email</span><span class="font-bold text-gray-900">${mechanic.email || 'N/A'}</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Phone</span><span class="font-bold text-gray-900">${mechanic.phone || 'N/A'}</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Date of Birth</span><span class="font-bold text-gray-900">${mechanic.dob || 'N/A'}</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Address</span><span class="font-bold text-gray-900">${mechanic.address || 'N/A'}</span></div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 class="text-lg font-black mb-4 text-gray-900">Employment Details</h3>
+                        <div class="space-y-3">
+                            <div><span class="text-xs font-bold text-muted uppercase block">Specialization</span><span class="font-bold text-gray-900">${mechanic.specialization || 'General'}</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Years of Experience</span><span class="font-bold text-gray-900">${mechanic.years_experience || 0} years</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Joined Date</span><span class="font-bold text-gray-900">${new Date(mechanic.joined_date).toLocaleDateString()}</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Completion Rate</span><span class="font-bold text-gray-900">${completionRate}%</span></div>
+                            <div><span class="text-xs font-bold text-muted uppercase block">Status</span><span class="badge ${mechanic.is_available ? 'badge-success' : 'badge-warning'}">${mechanic.is_available ? 'Available' : 'Busy'}</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-8">
+                    <h3 class="text-lg font-black mb-4 text-gray-900">Job History (Recent ${data.job_history.length})</h3>
+                    ${data.job_history.length > 0 ? `
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 text-xs uppercase">
+                                    <tr>
+                                        <th class="p-3 text-left">Date</th>
+                                        <th class="p-3 text-left">Booking</th>
+                                        <th class="p-3 text-left">Service Type</th>
+                                        <th class="p-3 text-left">Vehicle</th>
+                                        <th class="p-3 text-left">Status</th>
+                                        <th class="p-3 text-right">Fee</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.job_history.map(job => `
+                                        <tr class="border-t border-gray-100">
+                                            <td class="p-3">${new Date(job.created_at).toLocaleDateString()}</td>
+                                            <td class="p-3 font-mono text-xs">#${job.booking_number}</td>
+                                            <td class="p-3">${job.service_type}</td>
+                                            <td class="p-3">${job.make} ${job.model} (${job.license_plate})</td>
+                                            <td class="p-3"><span class="badge ${job.status === 'completed' || job.status === 'delivered' ? 'badge-success' : 'badge-info'} text-xs">${job.status}</span></td>
+                                            <td class="p-3 text-right font-bold">₹${parseFloat(job.mechanic_fee || 0).toFixed(2)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '<p class="text-muted text-center py-8">No job history available</p>'}
+                </div>
+
+                <div class="card">
+                    <h3 class="text-lg font-black mb-4 text-gray-900">Leave Requests</h3>
+                    ${data.leave_requests.length > 0 ? `
+                        <div class="space-y-2">
+                            ${data.leave_requests.map(leave => `
+                                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                    <div>
+                                        <span class="font-bold text-gray-900">${leave.leave_type}</span>
+                                        <span class="text-xs text-muted ml-2">${new Date(leave.start_date).toLocaleDateString()} - ${new Date(leave.end_date).toLocaleDateString()}</span>
+                                    </div>
+                                    <span class="badge ${leave.status === 'approved' ? 'badge-success' : leave.status === 'rejected' ? 'badge-danger' : 'badge-warning'} text-xs">${leave.status}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p class="text-muted text-center py-8">No leave requests found</p>'}
+                </div>
+            `;
+            
+            document.getElementById('mechanicModalContent').innerHTML = html;
+        }
+
+        function closeMechanicModal() {
+            document.getElementById('mechanicDetailsModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const detailsModal = document.getElementById('mechanicDetailsModal');
+            if (event.target == detailsModal) {
+                closeMechanicModal();
+            }
+        }
     </script>
 </body>
 </html>

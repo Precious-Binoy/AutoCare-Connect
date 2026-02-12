@@ -56,6 +56,13 @@ $totalRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE stat
 $totalRevenueResult = executeQuery($totalRevenueQuery, [], '');
 $totalRevenue = $totalRevenueResult ? ($totalRevenueResult->fetch_assoc()['revenue'] ?? 0) : 0;
 
+// Active Workers (Available Mechanics + Drivers)
+$activeWorkersQuery = "SELECT 
+    (SELECT COUNT(*) FROM mechanics m JOIN users u ON m.user_id = u.id WHERE m.is_available = TRUE) + 
+    (SELECT COUNT(*) FROM drivers d JOIN users u ON d.user_id = u.id WHERE d.is_available = TRUE) as count";
+$activeWorkersResult = executeQuery($activeWorkersQuery, [], '');
+$activeWorkers = $activeWorkersResult ? $activeWorkersResult->fetch_assoc()['count'] : 0;
+
 // Recent activity - latest 5 bookings
 $recentActivityQuery = "SELECT b.id, b.booking_number, b.status, b.created_at, b.service_type, 
                         u.name as customer_name, u.email as customer_email
@@ -68,6 +75,18 @@ $recentActivities = [];
 if ($recentActivityResult) {
     while ($row = $recentActivityResult->fetch_assoc()) {
         $recentActivities[] = $row;
+    }
+}
+
+// Fetch available worker names for the sub-header
+$availableWorkersQuery = "SELECT u.name, 'Mechanic' as role FROM mechanics m JOIN users u ON m.user_id = u.id WHERE m.is_available = TRUE
+                         UNION
+                         SELECT u.name, 'Driver' as role FROM drivers d JOIN users u ON d.user_id = u.id WHERE d.is_available = TRUE";
+$availableWorkersRes = executeQuery($availableWorkersQuery, [], '');
+$availableWorkerList = [];
+if ($availableWorkersRes) {
+    while ($row = $availableWorkersRes->fetch_assoc()) {
+        $availableWorkerList[] = $row;
     }
 }
 ?>
@@ -160,10 +179,11 @@ if ($recentActivityResult) {
                             <span class="text-primary text-lg"><i class="fa-solid fa-sack-dollar"></i></span>
                         </div>
                     </div>
+
                 </div>
 
                 <!-- Second Row Stats -->
-                <div class="grid gap-4 mb-8" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="grid gap-4 mb-8" style="grid-template-columns: repeat(5, 1fr);">
                     <!-- Total Bookings -->
                     <div class="card p-4">
                         <div class="flex justify-between">
@@ -200,6 +220,19 @@ if ($recentActivityResult) {
                                 </div>
                             </div>
                             <span class="text-warning text-xl"><i class="fa-solid fa-truck"></i></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Active Workers (Moved) -->
+                    <div class="card p-4">
+                        <div class="flex justify-between">
+                            <div>
+                                <span class="text-muted text-sm font-medium">Active Workers</span>
+                                <div class="flex items-end gap-2 mt-1">
+                                    <span class="text-3xl font-bold"><?php echo $activeWorkers; ?></span>
+                                </div>
+                            </div>
+                            <span class="text-secondary text-xl"><i class="fa-solid fa-user-check"></i></span>
                         </div>
                     </div>
 

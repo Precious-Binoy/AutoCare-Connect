@@ -1,0 +1,243 @@
+/* Profile Dropdown Menu */
+.profile-menu-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.profile-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    transition: all 0.3s ease;
+}
+
+.profile-trigger:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.profile-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    min-width: 280px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.profile-dropdown.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.profile-dropdown-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: center;
+}
+
+.profile-dropdown-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin: 0 auto 0.75rem;
+    border: 3px solid #2563eb;
+}
+
+.profile-dropdown-name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+}
+
+.profile-dropdown-role {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.profile-dropdown-menu {
+    padding: 0.5rem;
+}
+
+.profile-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    color: #374151;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+}
+
+.profile-dropdown-item:hover {
+    background-color: #f3f4f6;
+    color: #2563eb;
+}
+
+.profile-dropdown-item i {
+    width: 20px;
+    text-align: center;
+}
+
+.profile-dropdown-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 0.5rem 0;
+}
+
+/* Notification Bell */
+.notification-bell {
+    position: relative;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.notification-bell:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #ef4444;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+}
+
+.notification-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    min-width: 320px;
+    max-width: 400px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.notification-dropdown.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.notification-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notification-header h3 {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #1f2937;
+}
+
+.notification-clear {
+    font-size: 0.75rem;
+    color: #6b7280;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.notification-clear:hover {
+    color: #2563eb;
+}
+
+.notification-item {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.2s ease;
+    cursor: pointer;
+}
+
+.notification-item:hover {
+    background: #f9fafb;
+}
+
+.notification-item.unread {
+    background: #eff6ff;
+}
+
+.notification-item-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.notification-item-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #1f2937;
+}
+
+.notification-item-time {
+    font-size: 0.7rem;
+    color: #9ca3af;
+}
+
+.notification-item-message {
+    font-size: 0.8rem;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+.notification-empty {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 0.875rem;
+}
+
+/* Leave Request Table Spacing */
+table tr {
+    margin-bottom: 0.25rem;
+}
+
+table tbody tr {
+    border-spacing: 0 0.25rem;
+}
+
+table {
+    border-collapse: separate;
+    border-spacing: 0 0.25rem;
+}
