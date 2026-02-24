@@ -73,7 +73,7 @@ $page_title = 'Garage Management';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $page_title; ?> - AutoCare Connect</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -98,29 +98,29 @@ $page_title = 'Garage Management';
                     </div>
                 <?php endif; ?>
 
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+                <div class="flex justify-between items-center gap-6 mb-10">
                     <div>
-                        <h1 class="text-4xl font-black text-gray-900 tracking-tight">My Garage</h1>
-                        <p class="text-muted font-medium text-lg">You have <?php echo count($vehicles); ?> specialized vehicle(s) registered.</p>
+                        <h1 class="section-header">My Garage</h1>
+                        <p class="text-muted font-medium text-sm">You have <?php echo count($vehicles); ?> specialized vehicle(s) registered.</p>
                     </div>
-                    <button onclick="document.getElementById('addVehicleModal').style.display='flex'" class="btn btn-primary h-16 px-10 rounded-2xl font-black text-lg shadow-2xl shadow-blue-100 hover:scale-105 active:scale-95 transition-all flex items-center gap-3">
-                        <i class="fa-solid fa-plus-circle"></i> Register New Car
+                    <button onclick="document.getElementById('addVehicleModal').style.display='flex'" class="btn btn-primary btn-compact font-bold shadow-lg">
+                        <i class="fa-solid fa-plus-circle mr-2"></i> Register New Car
                     </button>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     <?php if (empty($vehicles)): ?>
-                        <div class="col-span-full card p-24 text-center border-dashed border-2 bg-gray-50/30 flex flex-col items-center justify-center">
-                            <div class="w-32 h-32 bg-white rounded-full flex items-center justify-center mb-8 shadow-inner text-gray-200">
-                                <i class="fa-solid fa-car-rear text-6xl"></i>
+                        <div class="col-span-full glass-card no-hover p-12 text-center border-dashed border-2 bg-gray-50/30 flex flex-col items-center justify-center">
+                            <div class="w-16 h-16 bg-white rounded-xl flex items-center justify-center mb-6 shadow-sm text-gray-200">
+                                <i class="fa-solid fa-car-rear text-2xl"></i>
                             </div>
-                            <h2 class="text-3xl font-black text-gray-400">Your Garage is Empty</h2>
-                            <p class="max-w-sm mx-auto mt-4 text-gray-500 font-medium">Add your vehicles here to enjoy seamless service booking and historical tracking.</p>
-                            <button onclick="document.getElementById('addVehicleModal').style.display='flex'" class="mt-8 px-8 py-3 bg-primary text-white rounded-xl font-bold hover:shadow-lg transition-all">Start by Adding a Car</button>
+                            <h2 class="section-subheader text-gray-400">Your Garage is Empty</h2>
+                            <p class="max-w-sm mx-auto mt-4 text-gray-500 font-medium text-xs">Add your vehicles here to enjoy seamless service booking and historical tracking.</p>
+                            <button onclick="document.getElementById('addVehicleModal').style.display='flex'" class="mt-8 btn btn-primary btn-compact font-bold">Start by Adding a Car</button>
                         </div>
                     <?php else: ?>
                         <?php foreach ($vehicles as $vehicle): ?>
-                            <div class="card group transition-all duration-500 hover:shadow-[0_20px_50px_-20px_rgba(0,0,0,0.1)] hover:-translate-y-2 relative overflow-hidden">
+                            <div class="glass-card no-hover relative overflow-hidden">
                                 <div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-10 -mt-10 transition-all duration-500 group-hover:bg-primary/10"></div>
                                 
                                 <div class="p-8 relative">
@@ -137,10 +137,10 @@ $page_title = 'Garage Management';
                                         </div>
                                     </div>
                                     
-                                    <div class="mb-10">
-                                        <span class="text-[10px] font-black uppercase text-primary tracking-[0.2em] mb-2 block">Premium <?php echo htmlspecialchars($vehicle['type']); ?></span>
-                                        <h3 class="text-3xl font-black text-gray-900 mb-2 leading-none cursor-default group-hover:text-primary transition-colors"><?php echo htmlspecialchars($vehicle['make']); ?></h3>
-                                        <p class="text-xl font-bold text-gray-400"><?php echo htmlspecialchars($vehicle['model']); ?> <span class="text-sm font-medium opacity-50 ml-1">(<?php echo $vehicle['year']; ?>)</span></p>
+                                    <div class="mb-4">
+                                        <span class="text-[10px] font-black uppercase text-primary tracking-[0.2em] mb-1 block">Premium <?php echo htmlspecialchars($vehicle['type']); ?></span>
+                                        <h3 class="text-xl font-bold text-gray-900 mb-1 leading-none"><?php echo htmlspecialchars($vehicle['make']); ?></h3>
+                                        <p class="text-sm font-bold text-gray-400"><?php echo htmlspecialchars($vehicle['model']); ?> <span class="text-[10px] font-medium opacity-50 ml-1">(<?php echo $vehicle['year']; ?>)</span></p>
                                     </div>
                                     
                                     <div class="grid grid-cols-2 gap-4 mb-10">
@@ -158,11 +158,11 @@ $page_title = 'Garage Management';
                                     </div>
                                     
                                     <div class="flex gap-4">
-                                        <a href="book_service.php?vehicle_id=<?php echo $vehicle['id']; ?>" class="btn btn-primary flex-1 h-14 text-sm font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-100/50 flex items-center justify-center gap-3">
+                                        <a href="book_service.php?vehicle_id=<?php echo $vehicle['id']; ?>" class="btn btn-primary flex-1 btn-compact font-bold uppercase tracking-widest shadow-lg flex items-center justify-center gap-2">
                                             Book Care
                                         </a>
-                                        <a href="history.php?vehicle_id=<?php echo $vehicle['id']; ?>" class="w-14 h-14 bg-white text-gray-400 hover:text-primary hover:border-primary rounded-2xl flex items-center justify-center border border-gray-100 transition-all font-bold group-hover:shadow-md" title="Maintenance Archive">
-                                            <i class="fa-solid fa-receipt text-xl"></i>
+                                        <a href="my_bookings.php?vehicle_id=<?php echo $vehicle['id']; ?>" class="w-12 h-12 bg-white text-gray-400 hover:text-primary hover:border-primary rounded-xl flex items-center justify-center border border-gray-100 transition-all font-bold" title="Maintenance Archive">
+                                            <i class="fa-solid fa-receipt"></i>
                                         </a>
                                     </div>
                                 </div>
@@ -178,13 +178,13 @@ $page_title = 'Garage Management';
     <div id="addVehicleModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); z-index: 1000; align-items: center; justify-content: center; padding: 1.5rem;">
         <div style="background: white; border-radius: 2.5rem; max-width: 650px; width: 100%; box-shadow: 0 40px 100px -20px rgba(0,0,0,0.3); overflow: hidden; animation: modalEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1);">
             <div class="p-12">
-                <div class="flex justify-between items-center mb-10">
+                <div class="flex justify-between items-center mb-8">
                     <div>
-                        <h2 class="text-4xl font-black text-gray-900 tracking-tight">Add New Car</h2>
-                        <p class="text-muted font-medium text-lg">Tell us about your machine to provide the best care.</p>
+                        <h2 class="section-subheader text-gray-900">Add New Car</h2>
+                        <p class="text-muted text-sm">Tell us about your machine to provide the best care.</p>
                     </div>
-                    <button onclick="document.getElementById('addVehicleModal').style.display='none'" class="w-14 h-14 rounded-2xl bg-gray-50 text-gray-400 hover:text-gray-900 flex items-center justify-center transition-all border border-gray-100">
-                        <i class="fa-solid fa-xmark text-xl"></i>
+                    <button onclick="document.getElementById('addVehicleModal').style.display='none'" class="w-10 h-10 rounded-xl bg-gray-50 text-gray-400 hover:text-gray-900 flex items-center justify-center border border-gray-100">
+                        <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
                 
@@ -231,9 +231,9 @@ $page_title = 'Garage Management';
                         </div>
                     </div>
                     
-                    <div class="md:col-span-2 pt-8">
-                        <button type="submit" class="btn btn-primary w-full h-18 text-xl font-black rounded-3xl shadow-2xl shadow-blue-100 flex items-center justify-center gap-4 transition-all active:scale-95">
-                            Register Into Garage <i class="fa-solid fa-arrow-right-long opacity-40"></i>
+                    <div class="md:col-span-2 pt-4">
+                        <button type="submit" class="btn btn-primary w-full btn-compact text-base font-bold shadow-lg flex items-center justify-center gap-2">
+                            Register Into Garage <i class="fa-solid fa-arrow-right opacity-40"></i>
                         </button>
                     </div>
                 </form>

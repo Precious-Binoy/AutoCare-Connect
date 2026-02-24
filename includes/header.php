@@ -26,7 +26,7 @@
             <!-- Notification Bell -->
             <div class="notification-bell" id="notificationBell">
                 <i class="fa-regular fa-bell text-xl"></i>
-                <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+                <span class="notification-badge" id="notificationBadge" style="display: none;"></span>
             </div>
             
             <!-- Notification Dropdown -->
@@ -84,7 +84,8 @@
                     $profileLink = '';
                     if ($role === 'driver') $profileLink = 'driver_dashboard.php?tab=profile';
                     elseif ($role === 'mechanic') $profileLink = 'mechanic_dashboard.php?tab=profile';
-                    elseif ($role === 'admin') $profileLink = 'admin_dashboard.php';
+                    elseif ($role === 'admin') $profileLink = 'admin_dashboard.php?tab=profile';
+
                     else $profileLink = 'customer_dashboard.php?tab=profile';
                     ?>
                     <a href="<?php echo $profileLink; ?>" class="profile-dropdown-item">

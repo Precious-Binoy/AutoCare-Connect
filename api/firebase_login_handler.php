@@ -86,28 +86,30 @@ try {
         $updateParams = [];
         $updateTypes = "";
         
-        if ($hasGoogleId && $user['google_id'] !== $uid) {
+        if ($hasGoogleId && (empty($user['google_id']) || $user['google_id'] !== $uid)) {
             $updateParts[] = "google_id = ?";
             $updateParams[] = $uid;
             $updateTypes .= "s";
         }
         
-        if ($hasProfileImage && $picture && $user['profile_image'] !== $picture) {
+        // ONLY update profile image if it's currently empty in our DB
+        if ($hasProfileImage && $picture && empty($user['profile_image'])) {
              $updateParts[] = "profile_image = ?";
              $updateParams[] = $picture;
              $updateTypes .= "s";
+             $user['profile_image'] = $picture;
         }
 
-        // Update name if provided and significantly better (e.g. not empty and different)
-        if ($hasName && $name && $user['name'] !== $name) {
+        // Update name if provided and our local name is empty
+        if ($hasName && $name && empty($user['name'])) {
              $updateParts[] = "name = ?";
              $updateParams[] = $name;
              $updateTypes .= "s";
-             $user['name'] = $name; // Sync for session
+             $user['name'] = $name; 
         }
 
-        // Update phone if provided
-        if ($hasPhone && $inputPhone && (empty($user['phone']) || $user['phone'] !== $inputPhone)) {
+        // Update phone if provided and our local phone is empty
+        if ($hasPhone && $inputPhone && empty($user['phone'])) {
             $updateParts[] = "phone = ?";
             $updateParams[] = $inputPhone;
             $updateTypes .= "s";
@@ -184,7 +186,8 @@ try {
     $_SESSION['user_email'] = $email;
     $_SESSION['user_phone'] = $user['phone'] ?? $inputPhone ?? null;
     $_SESSION['user_role'] = $user['role'] ?? 'customer';
-    $_SESSION['firebase_uid'] = $uid; // Store Firebase UID in session for reference
+    $_SESSION['profile_image'] = $user['profile_image'] ?? null;
+    $_SESSION['firebase_uid'] = $uid; 
     $_SESSION['last_activity'] = time();
 
     // Determine redirect URL

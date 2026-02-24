@@ -11,12 +11,13 @@ $booking = null;
 if ($booking_id) {
     // Fetch specific booking details with vehicle and mechanic info
     $query = "SELECT b.*, v.make, v.model, v.year, v.license_plate, v.vin, v.mileage, 
-                     m.id as mechanic_id, u.name as mechanic_name, u.phone as mechanic_phone 
+                     m.id as mechanic_id, u.name as mechanic_name, u.phone as mechanic_phone, u.email as mechanic_email 
               FROM bookings b 
               JOIN vehicles v ON b.vehicle_id = v.id 
               LEFT JOIN mechanics m ON b.mechanic_id = m.id 
               LEFT JOIN users u ON m.user_id = u.id
               WHERE b.id = ? AND b.user_id = ?";
+
     $result = executeQuery($query, [$booking_id, $userId], 'ii');
     if ($result && $result->num_rows > 0) {
         $booking = $result->fetch_assoc();
@@ -51,7 +52,7 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Track Service - AutoCare Connect</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -72,14 +73,14 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                 <?php else: ?>
                     <div class="flex justify-between items-center mb-6">
                         <div>
-                             <div class="flex items-center gap-2 text-primary font-bold text-sm mb-1">
+                             <div class="flex items-center gap-2 text-primary font-bold text-xs mb-1">
                                 <i class="fa-solid fa-receipt"></i> Booking #<?php echo htmlspecialchars($booking['booking_number']); ?>
                             </div>
-                            <h1 class="text-4xl font-extrabold mb-1">Track Your Service</h1>
-                            <p class="text-muted">Real-time status updates for your vehicle repair.</p>
+                            <h1 class="section-header mb-1">Track Your Service</h1>
+                            <p class="text-muted text-sm">Real-time status updates for your vehicle repair.</p>
                         </div>
-                        <div class="flex gap-2">
-                             <a href="customer_dashboard.php" class="btn btn-white font-bold"><i class="fa-solid fa-arrow-left mr-2"></i> Dashboard</a>
+        <div class="flex gap-2">
+                             <a href="customer_dashboard.php" class="btn btn-white btn-compact font-bold"><i class="fa-solid fa-arrow-left mr-2"></i> Dashboard</a>
                         </div>
                     </div>
 
@@ -90,7 +91,7 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                 <i class="fa-solid fa-car"></i>
                             </div>
                             <div class="flex-1">
-                                <h2 class="text-2xl font-bold text-gray-900"><?php echo htmlspecialchars($booking['year'] . ' ' . $booking['make'] . ' ' . $booking['model']); ?></h2>
+                                <h2 class="text-lg font-bold text-gray-900"><?php echo htmlspecialchars($booking['year'] . ' ' . $booking['make'] . ' ' . $booking['model']); ?></h2>
                                 <p class="text-sm font-mono text-muted uppercase tracking-wider mt-1"><?php echo htmlspecialchars($booking['license_plate']); ?></p>
                             </div>
                         </div>
@@ -99,24 +100,41 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                     <!-- Worker Info Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                             <!-- Mechanic Card -->
-                            <div class="card p-5 flex flex-col gap-3 border-l-4 border-primary">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-12 h-12 bg-primary text-white flex items-center justify-center rounded-2xl text-xl font-bold shadow-lg shadow-blue-100">
+                            <div class="card p-4 flex flex-col gap-2 border-l-4 border-primary shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-primary/10 text-primary flex items-center justify-center rounded-xl text-lg font-bold">
                                         <i class="fa-solid fa-screwdriver-wrench"></i>
                                     </div>
-                                    <div class="flex-1">
-                                        <div class="text-[10px] text-primary uppercase font-black tracking-[0.2em]">Assigned Mechanic</div>
-                                        <div class="font-bold text-lg"><?php echo htmlspecialchars($booking['mechanic_name'] ?? 'Assigning Soon...'); ?></div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-[9px] text-primary uppercase font-black tracking-widest leading-none mb-1">Assigned Mechanic</div>
+                                        <div class="font-bold text-sm truncate"><?php echo htmlspecialchars($booking['mechanic_name'] ?? 'Assigning Soon...'); ?></div>
                                     </div>
-                                    <?php if (isset($booking['mechanic_phone']) && $booking['mechanic_phone']): ?>
-                                        <a href="tel:<?php echo $booking['mechanic_phone']; ?>" class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center hover:scale-110 transition-transform shadow-md"><i class="fa-solid fa-phone text-sm"></i></a>
+                                </div>
+                                <?php if (isset($booking['mechanic_phone']) || isset($booking['mechanic_email'])): ?>
+                                <div class="flex flex-col gap-1.5 mt-1 pt-2 border-t border-gray-50">
+                                    <?php if ($booking['mechanic_phone']): ?>
+                                        <a href="tel:<?php echo $booking['mechanic_phone']; ?>" class="flex items-center gap-2 text-[10px] text-muted hover:text-primary transition-colors group">
+                                            <i class="fa-solid fa-phone text-primary font-black"></i> 
+                                            <span class="font-bold group-hover:underline"><?php echo $booking['mechanic_phone']; ?></span>
+                                        </a>
+                                    <?php endif; ?>
+                                    <?php if ($booking['mechanic_email']): ?>
+                                        <a href="mailto:<?php echo $booking['mechanic_email']; ?>" class="flex items-center gap-2 text-[10px] text-muted hover:text-primary transition-colors group">
+                                            <i class="fa-solid fa-envelope text-primary font-black"></i> 
+                                            <span class="font-bold group-hover:underline"><?php echo $booking['mechanic_email']; ?></span>
+                                        </a>
                                     <?php endif; ?>
                                 </div>
+                                <?php endif; ?>
                             </div>
 
                             <!-- Driver Cards - Only show RELEVANT phase -->
                             <?php 
-                                $driverQuery = "SELECT driver_name, driver_phone, status, type FROM pickup_delivery WHERE booking_id = ? ORDER BY CASE WHEN type = 'pickup' THEN 0 ELSE 1 END ASC, created_at ASC";
+                                $driverQuery = "SELECT pd.driver_name, pd.driver_phone, pd.status, pd.type, u.email as driver_email 
+                                                FROM pickup_delivery pd 
+                                                LEFT JOIN users u ON pd.driver_user_id = u.id 
+                                                WHERE pd.booking_id = ? 
+                                                ORDER BY CASE WHEN pd.type = 'pickup' THEN 0 ELSE 1 END ASC, pd.created_at ASC";
                                 $driverRes = executeQuery($driverQuery, [$booking_id], 'i');
                                 $drivers = [];
                                 if ($driverRes) {
@@ -134,58 +152,59 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                     ];
                                 }
 
-                                // Filter: Only show the CURRENT relevant driver card
-                                $visibleDrivers = [];
-                                foreach ($drivers as $d) {
-                                    if ($d['type'] == 'pickup') {
-                                        if (in_array($booking['status'], ['pending', 'confirmed']) || $d['status'] != 'completed') {
-                                            $visibleDrivers[] = $d;
-                                        }
-                                    } elseif ($d['type'] == 'delivery') {
-                                        if (in_array($booking['status'], ['ready_for_delivery', 'completed', 'delivered'])) {
-                                            $visibleDrivers[] = $d;
-                                        }
-                                    }
-                                }
+                                // Show ALL assigned drivers (Pickup & Delivery)
+                                $visibleDrivers = array_filter($drivers, function($d) {
+                                    return !empty($d['driver_name']);
+                                });
                                 
-                                if (empty($visibleDrivers) && !empty($drivers)) {
-                                    $visibleDrivers[] = $drivers[0];
+                                // Fallback: If no driver assigned yet
+                                if (empty($visibleDrivers) && $booking['has_pickup_delivery']) {
+                                    $visibleDrivers[] = [
+                                        'type' => 'pickup',
+                                        'driver_name' => '',
+                                        'driver_phone' => '',
+                                        'status' => 'pending',
+                                        'driver_email' => ''
+                                    ];
                                 }
                             ?>
 
                             <?php foreach ($visibleDrivers as $activeDriver): ?>
-                            <div class="card p-5 flex flex-col gap-3 border-l-4 <?php echo $activeDriver['type'] == 'pickup' ? 'border-warning' : 'border-success'; ?>">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-12 h-12 <?php echo $activeDriver['type'] == 'pickup' ? 'bg-warning' : 'bg-success'; ?> text-white flex items-center justify-center rounded-2xl text-xl font-bold shadow-lg">
+                            <div class="card p-4 flex flex-col gap-2 border-l-4 <?php echo $activeDriver['type'] == 'pickup' ? 'border-warning' : 'border-success'; ?> shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 <?php echo $activeDriver['type'] == 'pickup' ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'; ?> flex items-center justify-center rounded-xl text-lg font-bold">
                                         <i class="fa-solid <?php echo $activeDriver['type'] == 'pickup' ? 'fa-truck-arrow-right' : 'fa-truck-fast'; ?>"></i>
                                     </div>
-                                    <div class="flex-1">
-                                        <div class="text-[10px] <?php echo $activeDriver['type'] == 'pickup' ? 'text-warning' : 'text-success'; ?> uppercase font-black tracking-[0.2em]"><?php echo ucfirst($activeDriver['type']); ?> Driver</div>
-                                        <div class="font-bold text-lg">
-                                            <?php 
-                                            if (!empty($activeDriver['driver_name'])) {
-                                                echo htmlspecialchars($activeDriver['driver_name']);
-                                            } else {
-                                                echo 'Awaiting Assignment';
-                                            }
-                                            ?>
-                                        </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-[9px] <?php echo $activeDriver['type'] == 'pickup' ? 'text-warning' : 'text-success'; ?> uppercase font-black tracking-widest leading-none mb-1"><?php echo ucfirst($activeDriver['type']); ?> Agent</div>
+                                        <div class="font-bold text-sm truncate"><?php echo !empty($activeDriver['driver_name']) ? htmlspecialchars($activeDriver['driver_name']) : 'Awaiting Assignment'; ?></div>
                                     </div>
-                                    <?php if ($activeDriver && $activeDriver['driver_phone']): ?>
-                                        <a href="tel:<?php echo $activeDriver['driver_phone']; ?>" class="w-10 h-10 rounded-full <?php echo $activeDriver['type'] == 'pickup' ? 'bg-warning' : 'bg-success'; ?> text-white flex items-center justify-center hover:scale-110 transition-transform shadow-md"><i class="fa-solid fa-phone text-sm"></i></a>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="bg-gray-50 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center justify-between">
-                                    <span class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2">
                                         <span class="w-2 h-2 rounded-full <?php 
                                             if ($activeDriver['status'] == 'completed') echo 'bg-success';
                                             elseif ($activeDriver['status'] == 'in_transit') echo 'bg-primary animate-pulse';
                                             else echo 'bg-warning';
                                         ?>"></span>
-                                        <?php echo str_replace('_', ' ', $activeDriver['status']); ?>
-                                    </span>
-                                    <span class="<?php echo $activeDriver['type'] == 'pickup' ? 'text-warning' : 'text-success'; ?>"><?php echo ucfirst($activeDriver['type']); ?></span>
+                                        <span class="text-[9px] font-black text-muted uppercase"><?php echo str_replace('_', ' ', $activeDriver['status']); ?></span>
+                                    </div>
                                 </div>
+                                
+                                <?php if (!empty($activeDriver['driver_phone']) || !empty($activeDriver['driver_email'])): ?>
+                                <div class="flex flex-col gap-1.5 mt-1 pt-2 border-t border-gray-50">
+                                    <?php if ($activeDriver['driver_phone']): ?>
+                                        <a href="tel:<?php echo $activeDriver['driver_phone']; ?>" class="flex items-center gap-2 text-[10px] text-muted hover:text-primary transition-colors group">
+                                            <i class="fa-solid fa-phone <?php echo $activeDriver['type'] == 'pickup' ? 'text-warning' : 'text-success'; ?> font-black"></i> 
+                                            <span class="font-bold group-hover:underline"><?php echo $activeDriver['driver_phone']; ?></span>
+                                        </a>
+                                    <?php endif; ?>
+                                    <?php if ($activeDriver['driver_email']): ?>
+                                        <a href="mailto:<?php echo $activeDriver['driver_email']; ?>" class="flex items-center gap-2 text-[10px] text-muted hover:text-primary transition-colors group">
+                                            <i class="fa-solid fa-envelope <?php echo $activeDriver['type'] == 'pickup' ? 'text-warning' : 'text-success'; ?> font-black"></i> 
+                                            <span class="font-bold group-hover:underline"><?php echo $activeDriver['driver_email']; ?></span>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                                <?php endif; ?>
                             </div>
                             <?php endforeach; ?>
                         </div>
@@ -248,7 +267,7 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                             $progressFraction = $activeIndex / 4;
                         ?>
                         <div class="timeline-horizontal" style="min-width: 600px;">
-                            <div class="timeline-progress" style="width: calc((100% - 3rem - 100px) * <?php echo $progressFraction; ?>);"></div>
+                            <div class="timeline-progress" style="width: calc((100% - 132px) * <?php echo $progressFraction; ?>);"></div>
 
                             <div class="timeline-step <?php echo $activeIndex >= 0 ? ($activeIndex > 0 ? 'completed' : 'active') : ''; ?>">
                                 <div class="timeline-dot"><i class="fa-solid fa-calendar-check"></i></div>
@@ -414,13 +433,30 @@ $currentStep = $booking ? getStatusStep($booking['status']) : 0;
                                         </div>
                                     </div>
                                     
-                                    <!-- Payment Button -->
-                                    <button class="btn btn-success w-full py-4 text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transition-all">
-                                        <i class="fa-solid fa-credit-card mr-2"></i> Pay Now
-                                    </button>
-                                    <p class="text-[10px] text-center text-muted mt-3">
-                                        <i class="fa-solid fa-lock mr-1"></i> Secure payment powered by AutoCare Connect
-                                    </p>
+                                    <!-- Payment Button / Paid Badge -->
+                                    <?php if (($booking['payment_status'] ?? 'unpaid') === 'paid'): ?>
+                                        <div class="flex items-center justify-center gap-3 bg-green-50 border-2 border-green-200 rounded-xl py-4 px-6">
+                                            <div class="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md">
+                                                <i class="fa-solid fa-check"></i>
+                                            </div>
+                                            <div class="text-left">
+                                                <div class="font-black text-green-700 text-lg">Completed ✓</div>
+                                                <div class="text-[10px] text-green-600 font-medium">
+                                                    Paid on <?php echo date('M d, Y', strtotime($booking['paid_at'] ?? 'now')); ?> via <?php echo ucfirst($booking['payment_method'] ?? 'Razorpay'); ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p class="text-[10px] text-center text-muted mt-3">
+                                            <i class="fa-solid fa-circle-check text-green-500 mr-1"></i> Payment confirmed by AutoCare Connect
+                                        </p>
+                                    <?php else: ?>
+                                        <a href="pay_bill.php?id=<?php echo $booking_id; ?>" class="btn btn-success w-full py-4 text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-3">
+                                            <i class="fa-solid fa-credit-card"></i> Pay ₹<?php echo number_format($booking['final_cost'] ?? 0, 2); ?> Now
+                                        </a>
+                                        <p class="text-[10px] text-center text-muted mt-3">
+                                            <i class="fa-solid fa-lock mr-1"></i> Secure payment powered by Razorpay
+                                        </p>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <?php else: ?>

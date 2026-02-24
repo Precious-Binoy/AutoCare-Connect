@@ -9,6 +9,87 @@ requireAdmin();
 // Set current page for navigation
 $current_page = 'admin_dashboard.php';
 $page_title = 'Admin Dashboard';
+$activeTab = $_GET['tab'] ?? 'dashboard';
+$user_id = getCurrentUserId();
+$conn = getDbConnection();
+
+$success_msg = '';
+$error_msg = '';
+
+// Handle Profile Update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
+    $name = sanitizeInput($_POST['name'] ?? '');
+    $phone = sanitizeInput($_POST['phone'] ?? '');
+    $dob = sanitizeInput($_POST['dob'] ?? '');
+    $address = sanitizeInput($_POST['address'] ?? '');
+
+    // Handle Image Upload
+    $profile_image_path = $_SESSION['user_image'] ?? null; // Should ideally fetch from DB if session is stale
+    
+    // Fetch current from DB to be sure
+    $stmt = $conn->prepare("SELECT profile_image FROM users WHERE id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $currRes = $stmt->get_result();
+    $currUser = $currRes->fetch_assoc();
+    $profile_image_path = $currUser['profile_image'] ?? null;
+
+    if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = 'assets/uploads/profile/';
+        if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+        
+        $fileExt = strtolower(pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION));
+        $validExts = ['jpg', 'jpeg', 'png', 'gif'];
+        
+        if (in_array($fileExt, $validExts)) {
+            $newFileName = 'user_' . $user_id . '_' . time() . '.' . $fileExt;
+            $targetPath = $uploadDir . $newFileName;
+            
+            if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $targetPath)) {
+                $profile_image_path = $targetPath;
+            } else {
+                $error_msg = "Failed to upload image.";
+            }
+        } else {
+            $error_msg = "Invalid file type. Only JPG, PNG, GIF allowed.";
+        }
+    }
+
+    if (empty($error_msg)) {
+        // DOB Validation
+        if (!empty($dob)) {
+            $dobDate = new DateTime($dob);
+            $today = new DateTime();
+            $age = $today->diff($dobDate)->y;
+            
+            if ($dobDate > $today) {
+                $error_msg = "Date of birth cannot be in the future.";
+            } elseif ($age < 18) {
+                $error_msg = "You must be at least 18 years old.";
+            }
+        }
+    }
+
+    if (empty($error_msg)) {
+        // Update users table
+        $updateUserQuery = "UPDATE users SET name = ?, phone = ?, profile_image = ?, dob = ?, address = ? WHERE id = ?";
+        $result = executeQuery($updateUserQuery, [$name, $phone, $profile_image_path, $dob, $address, $user_id], 'sssssi');
+        
+        if ($result) {
+            $_SESSION['user_name'] = $name;
+            $_SESSION['profile_image'] = $profile_image_path;
+            $success_msg = "Profile updated successfully!";
+        } else {
+            $error_msg = "Error updating profile.";
+        }
+    }
+
+}
+
+// Fetch user info for profile
+$adminQuery = "SELECT id, name, email, phone, profile_image, dob, address FROM users WHERE id = ?";
+$adminRes = executeQuery($adminQuery, [$user_id], 'i');
+$admin = $adminRes->fetch_assoc();
 
 // Fetch real statistics from database
 // Total bookings
@@ -107,6 +188,19 @@ if ($availableWorkersRes) {
             <?php include 'includes/header.php'; ?>
             
             <div class="page-content">
+                <?php if ($success_msg): ?>
+                    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-xl relative mb-6 animate-fade-in" role="alert">
+                        <span class="block sm:inline font-bold"><i class="fa-solid fa-circle-check mr-2"></i> <?php echo htmlspecialchars($success_msg); ?></span>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if ($error_msg): ?>
+                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl relative mb-6 animate-fade-in" role="alert">
+                        <span class="block sm:inline font-bold"><i class="fa-solid fa-circle-xmark mr-2"></i> <?php echo htmlspecialchars($error_msg); ?></span>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($activeTab === 'dashboard'): ?>
                 <div class="flex justify-between items-center mb-6">
                     <div>
                         <h1 class="text-2xl font-bold">Admin Dashboard</h1>
@@ -524,8 +618,87 @@ if ($availableWorkersRes) {
                     </div>
                 </div>
 
+                <?php elseif ($activeTab === 'profile'): ?>
+                    <!-- Modern Profile Redesign -->
+                    <div class="animate-fade-in pt-6 pb-12">
+                        <div class="profile-card">
+                            <form method="POST" enctype="multipart/form-data">
+                                <div class="profile-avatar-container">
+                                    <?php 
+                                        $displayImage = !empty($admin['profile_image']) ? $admin['profile_image'] : 'https://ui-avatars.com/api/?name=' . urlencode($admin['name'] ?? 'Admin') . '&background=2563eb&color=fff&size=128';
+                                    ?>
+                                    <img src="<?php echo htmlspecialchars($displayImage); ?>" alt="Profile" class="profile-avatar" id="avatarPreview">
+                                    <label for="profile_upload" class="edit-avatar-btn" title="Change Photo">
+                                        <i class="fa-solid fa-pencil"></i>
+                                    </label>
+                                    <input type="file" name="profile_image" id="profile_upload" class="hidden" accept="image/*" onchange="previewImage(this)">
+                                </div>
+
+                                <h2 class="text-xl font-black text-gray-900 mb-1"><?php echo htmlspecialchars($admin['name'] ?? ''); ?></h2>
+                                <p class="text-xs font-bold text-muted uppercase tracking-wider mb-8">System Administrator</p>
+
+                                <div class="text-left">
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Full Name</label>
+                                        <input type="text" name="name" class="input-modern" value="<?php echo htmlspecialchars($admin['name'] ?? ''); ?>" required>
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">
+                                            Email Address 
+                                            <span class="verified-badge"><i class="fa-solid fa-check"></i> Verified</span>
+                                        </label>
+                                        <input type="email" class="input-modern" value="<?php echo htmlspecialchars($admin['email'] ?? 'No Email'); ?>" disabled>
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Phone Number</label>
+                                        <input type="tel" name="phone" class="input-modern" value="<?php echo htmlspecialchars($admin['phone'] ?? ''); ?>" placeholder="Enter phone number" required>
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Date of Birth</label>
+                                        <input type="date" name="dob" class="input-modern" value="<?php echo htmlspecialchars($admin['dob'] ?? ''); ?>">
+                                    </div>
+
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Home Address</label>
+                                        <textarea name="address" class="input-modern" style="min-height: 100px; resize: vertical;" placeholder="Enter your full address"><?php echo htmlspecialchars($admin['address'] ?? ''); ?></textarea>
+                                    </div>
+                                    
+                                    <div class="input-group-modern">
+                                        <label class="input-label-modern">Country</label>
+                                        <select class="input-modern">
+                                            <option>India</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <button type="submit" name="update_profile" class="btn-save-profile">
+                                    Save Changes
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+    <script src="assets/js/profile-validation.js"></script>
+    <?php include 'assets/js/profile-validation.js'; ?>
+    <script>
+        function previewImage(input) {
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('avatarPreview').src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+    </script>
+                <?php endif; ?>
+
             </div>
         </main>
     </div>
 </body>
 </html>
+

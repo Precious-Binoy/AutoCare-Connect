@@ -11,14 +11,26 @@ $current_page = 'my_bookings.php';
 $conn = getDbConnection();
 
 // Fetch bookings with detailed vehicle and status info
+$vehicleId = isset($_GET['vehicle_id']) ? intval($_GET['vehicle_id']) : 0;
+
 if ($role === 'customer') {
-    $query = "SELECT b.*, v.make, v.model, v.license_plate, v.type as vehicle_type
-              FROM bookings b 
-              JOIN vehicles v ON b.vehicle_id = v.id 
-              WHERE b.user_id = ? 
-              ORDER BY b.created_at DESC";
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $userId);
+    if ($vehicleId > 0) {
+        $query = "SELECT b.*, v.make, v.model, v.license_plate, v.type as vehicle_type
+                  FROM bookings b 
+                  JOIN vehicles v ON b.vehicle_id = v.id 
+                  WHERE b.user_id = ? AND b.vehicle_id = ?
+                  ORDER BY b.created_at DESC";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("ii", $userId, $vehicleId);
+    } else {
+        $query = "SELECT b.*, v.make, v.model, v.license_plate, v.type as vehicle_type
+                  FROM bookings b 
+                  JOIN vehicles v ON b.vehicle_id = v.id 
+                  WHERE b.user_id = ? 
+                  ORDER BY b.created_at DESC";
+        $stmt = $conn->prepare($query);
+        $stmt->bind_param("i", $userId);
+    }
 } else {
     // Admin or Worker view
     $query = "SELECT b.*, v.make, v.model, v.license_plate, v.type as vehicle_type, u.name as customer_name
@@ -38,7 +50,7 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Service History - AutoCare Connect</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -49,16 +61,14 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
             <?php include 'includes/header.php'; ?>
             
             <div class="page-content">
-                <div class="flex justify-between items-center mb-8">
-                    <div>
-                        <h1 class="text-3xl font-black text-gray-900">Service History</h1>
-                        <p class="text-muted text-sm border-l-4 border-primary pl-3 mt-2">Centralized record of all your vehicle maintenance and repairs.</p>
-                    </div>
+                <div class="mb-8 text-center">
+                    <h1 class="section-header">Service History</h1>
+                    <p class="text-muted text-sm mt-1">Centralized record of all your vehicle maintenance and repairs.</p>
                 </div>
 
                 <div class="glass-card p-0 overflow-hidden shadow-xl border-none">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left">
+                        <table class="w-full text-center">
                             <thead class="bg-gray-50/50 border-b border-gray-100">
                                 <tr>
                                     <th class="p-5 text-[10px] font-black uppercase text-muted tracking-widest">Reference</th>
@@ -69,7 +79,8 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                                     <th class="p-5 text-[10px] font-black uppercase text-muted tracking-widest">Service Type</th>
                                     <th class="p-5 text-[10px] font-black uppercase text-muted tracking-widest">Status</th>
                                     <th class="p-5 text-[10px] font-black uppercase text-muted tracking-widest">Booking Date</th>
-                                    <th class="p-5 text-[10px] font-black uppercase text-muted tracking-widest text-right">Action</th>
+                                    <th class="p-5 text-[10px] font-black uppercase text-muted tracking-widest">Bill</th>
+                                    <th class="p-5 text-[10px] font-black uppercase text-muted tracking-widest">Action</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-50">
@@ -90,7 +101,7 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                                                 <span class="font-mono text-[10px] font-black text-primary bg-blue-50 px-2 py-1 rounded">#<?php echo $b['booking_number']; ?></span>
                                             </td>
                                             <td class="p-5">
-                                                <div class="flex items-center gap-3">
+                                                <div class="flex items-center justify-center gap-3 text-left">
                                                     <div class="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-muted border border-gray-100">
                                                         <i class="fa-solid fa-car text-sm"></i>
                                                     </div>
@@ -116,8 +127,24 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                                                 <div class="text-xs font-black text-gray-500"><?php echo date('M d, Y', strtotime($b['created_at'])); ?></div>
                                                 <div class="text-[9px] text-muted"><?php echo date('h:i A', strtotime($b['created_at'])); ?></div>
                                             </td>
-                                            <td class="p-5 text-right">
-                                                <a href="track_service.php?id=<?php echo $b['id']; ?>" class="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-primary shadow-sm hover:bg-primary hover:text-white hover:border-primary transition-all mx-auto lg:mr-0 lg:ml-auto">
+                                            <!-- Bill / Pay column -->
+                                            <td class="p-5">
+                                                <?php if ($b['is_billed'] && ($b['payment_status'] ?? 'unpaid') === 'paid'): ?>
+                                                    <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 text-[10px] font-black uppercase">
+                                                        <i class="fa-solid fa-circle-check text-green-500"></i> Completed
+                                                    </span>
+                                                <?php elseif ($b['is_billed'] && $b['final_cost'] > 0): ?>
+                                                    <a href="pay_bill.php?id=<?php echo $b['id']; ?>" class="inline-flex items-center gap-1.5 btn btn-success px-4 py-2 text-[10px] font-black rounded-lg shadow-sm hover:shadow-md transition-all">
+                                                        <i class="fa-solid fa-credit-card"></i> Pay ₹<?php echo number_format($b['final_cost'], 0); ?>
+                                                    </a>
+                                                    <div class="text-[9px] text-warning font-bold mt-1 uppercase tracking-tighter">Payment Pending</div>
+                                                <?php else: ?>
+                                                    <span class="text-[10px] text-muted italic">Bill Pending</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <!-- Track column -->
+                                            <td class="p-5">
+                                                <a href="track_service.php?id=<?php echo $b['id']; ?>" class="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-primary shadow-sm hover:bg-primary hover:text-white hover:border-primary transition-all mx-auto">
                                                     <i class="fa-solid fa-arrow-right-long"></i>
                                                 </a>
                                             </td>

@@ -48,6 +48,10 @@ $isDriver = $userRole === 'driver';
             <a href="messages.php" class="nav-item <?php echo ($current_page == 'messages.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-envelope"></i> Messages
             </a>
+            <a href="admin_dashboard.php?tab=profile" class="nav-item <?php echo ($current_page == 'admin_dashboard.php' && ($activeTab ?? '') == 'profile') ? 'active' : ''; ?>">
+                <i class="fa-solid fa-user-gear"></i> My Profile
+            </a>
+
         <?php elseif ($isMechanic): ?>
             <!-- Mechanic Navigation -->
             <a href="mechanic_dashboard.php?tab=jobs" class="nav-item <?php echo ($current_page == 'mechanic_dashboard.php' && ($activeTab ?? '') == 'jobs') ? 'active' : ''; ?>">
@@ -95,9 +99,6 @@ $isDriver = $userRole === 'driver';
             </a>
             <a href="book_service.php" class="nav-item <?php echo ($current_page == 'book_service.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-calendar-plus"></i> Book Service
-            </a>
-            <a href="pickup_delivery.php" class="nav-item <?php echo ($current_page == 'pickup_delivery.php') ? 'active' : ''; ?>">
-                <i class="fa-solid fa-truck"></i> Pickup & Delivery
             </a>
             <a href="track_service.php" class="nav-item <?php echo ($current_page == 'track_service.php') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-magnifying-glass-location"></i> Track Service

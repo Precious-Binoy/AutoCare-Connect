@@ -7,24 +7,29 @@
 require_once(__DIR__ . '/../config/db.php');
 
 /**
- * Create a notification for a specific user
+ * Core function to create a notification
  */
 function createNotification($user_id, $title, $message, $type = 'general') {
     $conn = getDbConnection();
-    
+    // Ensure created_at is explicitly set to avoid server TZ issues or missing defaults
     $query = "INSERT INTO notifications (user_id, title, message, type, is_read, created_at) 
               VALUES (?, ?, ?, ?, FALSE, NOW())";
-    
     $stmt = $conn->prepare($query);
     $stmt->bind_param("isss", $user_id, $title, $message, $type);
     $result = $stmt->execute();
     $stmt->close();
-    
     return $result;
 }
 
 /**
- * Notify all admin users
+ * Send notification to a specific user
+ */
+function notifyUser($user_id, $title, $message, $type = 'general') {
+    return createNotification($user_id, $title, $message, $type);
+}
+
+/**
+ * Send notification to all active admin users
  */
 function notifyAdmins($title, $message, $type = 'general') {
     $conn = getDbConnection();
@@ -42,7 +47,7 @@ function notifyAdmins($title, $message, $type = 'general') {
 }
 
 /**
- * Notify a worker (driver or mechanic)
+ * Send notification to a specific worker (mechanic or driver)
  */
 function notifyWorker($worker_user_id, $title, $message, $type = 'general') {
     return createNotification($worker_user_id, $title, $message, $type);

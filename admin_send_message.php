@@ -48,11 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
                 }
             }
             
-            // Insert notifications for all recipients
-            $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)");
+            // Insert notifications for all recipients using helper
             foreach ($recipients as $user_id) {
-                $stmt->bind_param("iss", $user_id, $message_title, $message_content);
-                $stmt->execute();
+                notifyUser($user_id, $message_title, $message_content, 'message');
             }
             
             $conn->commit();

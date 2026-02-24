@@ -402,6 +402,22 @@
     padding-left: 4rem !important;
 }
 
+.h-18 {
+    height: 4.5rem !important;
+}
+
+.h-20 {
+    height: 5rem !important;
+}
+
+.h-22 {
+    height: 5.5rem !important;
+}
+
+.h-24 {
+    height: 6rem !important;
+}
+
 .pr-6 {
     padding-right: 1.5rem !important;
 }
@@ -1065,10 +1081,23 @@ img {
 .btn-primary {
     background-color: var(--primary);
     color: white;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
 }
 
 .btn-primary:hover {
     background-color: var(--primary-dark);
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+}
+
+.btn-success {
+    background-color: var(--success);
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+}
+
+.btn-success:hover {
+    background-color: #059669;
+    box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
 }
 
 .btn-outline {
@@ -1089,12 +1118,29 @@ img {
 }
 
 .btn-sm {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
 }
 
-.btn-icon {
-    gap: 0.5rem;
+.btn-compact {
+    padding: 12px 24px !important;
+    font-size: 0.9rem !important;
+    border-radius: 14px !important;
+    height: auto !important;
+    min-height: auto !important;
+}
+
+.btn-map {
+    background-color: #6366f1 !important;
+    /* Indigo-500 */
+    color: white !important;
+}
+
+.btn-map:hover {
+    background-color: #4f46e5 !important;
+    /* Indigo-600 */
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
 }
 
 /* =========================================
@@ -1113,11 +1159,12 @@ img {
 }
 
 .form-control {
-    width: 100%;
+    width: 100% !important;
     padding: 0.75rem 1rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     font-size: 0.95rem;
+    font-weight: 500;
     transition: border-color 0.2s, box-shadow 0.2s;
     background-color: white;
 }
@@ -1126,6 +1173,44 @@ img {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* Custom Heights */
+.h-18 {
+    height: 4.50rem !important;
+}
+
+.h-20 {
+    height: 5.00rem !important;
+}
+
+.h-22 {
+    height: 5.50rem !important;
+}
+
+.h-24 {
+    height: 6.00rem !important;
+}
+
+/* Standardized Custom Form Appearance (Kills native symbols) */
+select.form-control {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    background-image: none !important;
+    padding-right: 5rem !important;
+    cursor: pointer;
+}
+
+/* Hide native date picker indicator visually but keep active */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0 !important;
+    position: absolute !important;
+    right: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    cursor: pointer !important;
 }
 
 .search-bar {
@@ -1671,34 +1756,30 @@ img {
     justify-content: space-between;
     align-items: flex-start;
     position: relative;
-    padding: 2rem 1.5rem 1rem;
-    margin: 1rem 0;
+    padding: 1.5rem 1rem 0.5rem;
+    margin: 0.5rem 0;
     width: 100%;
 }
 
 .timeline-horizontal::before {
     content: '';
     position: absolute;
-    top: calc(2rem + 20px);
-    /* padding + half of 40px dot */
-    left: calc(1.5rem + 50px);
-    right: calc(1.5rem + 50px);
-    height: 4px;
+    top: calc(1.5rem + 13px);
+    left: 66px;
+    right: 66px;
+    height: 2px;
     background: #E2E8F0;
     z-index: 1;
-    border-radius: 999px;
 }
 
 .timeline-progress {
     position: absolute;
-    top: calc(2rem + 20px);
-    /* Same as ::before */
-    left: calc(1.5rem + 50px);
-    height: 4px;
-    background: linear-gradient(90deg, var(--primary), #3B82F6);
+    top: calc(1.5rem + 13px);
+    left: 66px;
+    height: 2px;
+    background: var(--primary);
     z-index: 2;
     transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
-    border-radius: 999px;
     width: 0%;
 }
 
@@ -1709,22 +1790,24 @@ img {
     flex-direction: column;
     align-items: center;
     width: 100px;
-    gap: 0.75rem;
+    gap: 0.4rem;
 }
 
 .timeline-dot {
-    width: 40px;
-    height: 40px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
-    background: #F8FAFC;
-    border: 3px solid #E2E8F0;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 10px;
     color: #CBD5E1;
     transition: all 0.4s ease;
     flex-shrink: 0;
+    position: relative;
+    z-index: 3;
 }
 
 .timeline-step.active .timeline-dot {
@@ -1739,7 +1822,7 @@ img {
     border-color: var(--primary);
     background: var(--primary);
     color: white;
-    font-size: 14px;
+    font-size: 12px;
     box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
@@ -1860,10 +1943,80 @@ img {
 }
 
 .glass-card:hover {
-    transform: translateY(-8px) scale(1.02) !important;
-    box-shadow: 0 25px 50px -12px rgba(31, 38, 135, 0.15) !important;
-    border-color: var(--primary) !important;
+    transform: translateY(-4px);
+    box-shadow: 0 15px 30px -10px rgba(31, 38, 135, 0.1);
+    border-color: var(--primary);
     z-index: 10;
+}
+
+
+
+.stat-value {
+    font-size: 1.125rem !important;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+/* Standardization Utilities */
+.section-header {
+    font-size: 1.25rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.025em !important;
+    color: #0f172a !important;
+    margin-bottom: 0.15rem !important;
+}
+
+.section-subheader {
+    font-size: 0.95rem !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+::placeholder {
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    color: #94a3b8 !important;
+}
+
+.form-control {
+    font-size: 0.875rem !important;
+    /* text-sm */
+    color: #0f172a !important;
+}
+
+.no-hover {
+    transform: none !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+    transition: none !important;
+}
+
+.no-hover:hover {
+    transform: none !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+    border-color: inherit !important;
+}
+
+@media (max-width: 768px) {
+    .timeline-horizontal {
+        flex-direction: column;
+        align-items: center;
+        gap: 2rem;
+        padding-top: 1rem;
+    }
+
+    .timeline-horizontal::before,
+    .timeline-progress {
+        display: none;
+    }
+
+    .timeline-step {
+        width: 100% !important;
+        flex-direction: row !important;
+        justify-content: center;
+        gap: 1.5rem !important;
+    }
 }
 
 /* More Grids */
@@ -2333,4 +2486,50 @@ img {
 /* Utility Classes for Dynamic UI */
 .hidden {
     display: none !important;
+}
+
+/* Z-Index Utilities */
+.z-0 {
+    z-index: 0 !important;
+}
+
+.z-10 {
+    z-index: 10 !important;
+}
+
+.z-20 {
+    z-index: 20 !important;
+}
+
+.z-30 {
+    z-index: 30 !important;
+}
+
+.z-40 {
+    z-index: 40 !important;
+}
+
+.z-50 {
+    z-index: 50 !important;
+}
+
+/* Margin Bottom Utilities */
+.mb-12 {
+    margin-bottom: 3rem !important;
+}
+
+.mb-14 {
+    margin-bottom: 3.5rem !important;
+}
+
+.mb-16 {
+    margin-bottom: 4rem !important;
+}
+
+.mb-20 {
+    margin-bottom: 5rem !important;
+}
+
+.mb-24 {
+    margin-bottom: 6rem !important;
 }

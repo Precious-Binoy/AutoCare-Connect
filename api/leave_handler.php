@@ -59,17 +59,9 @@ if ($method === 'POST') {
             $userQuery = "SELECT name, role FROM users WHERE id = ?";
             $userResult = executeQuery($userQuery, [$userId], 'i');
             if ($userRow = $userResult->fetch_assoc()) {
-                // Get all admin users
-                $adminQuery = "SELECT id FROM users WHERE role = 'admin'";
-                $adminResult = executeQuery($adminQuery);
-                
                 $notifTitle = "📋 New Leave Request";
                 $notifMessage = "{$userRow['name']} ({$userRow['role']}) has requested {$type} leave from {$start} to {$end}.";
-                
-                while ($adminRow = $adminResult->fetch_assoc()) {
-                    $notifQuery = "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'general')";
-                    executeQuery($notifQuery, [$adminRow['id'], $notifTitle, $notifMessage], 'iss');
-                }
+                notifyAdmins($notifTitle, $notifMessage, 'leave');
             }
             
             echo json_encode(['success' => true, 'message' => 'Leave request submitted successfully']);
@@ -108,9 +100,8 @@ if ($method === 'POST') {
                     ? "Your {$leaveRow['leave_type']} leave request has been approved by the admin."
                     : "Your {$leaveRow['leave_type']} leave request has been rejected. " . ($adminComment ? "Reason: $adminComment" : '');
                 
-                // Insert notification
-                $notifQuery = "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'general')";
-                executeQuery($notifQuery, [$leaveRow['user_id'], $notifTitle, $notifMessage], 'iss');
+                // Notify User
+                notifyUser($leaveRow['user_id'], $notifTitle, $notifMessage, 'leave');
             }
             
             echo json_encode(['success' => true, 'message' => 'Leave request updated successfully']);

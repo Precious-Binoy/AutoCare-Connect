@@ -60,8 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
 
             // Notify Admin
             $adminRes = $conn->query("SELECT id FROM users WHERE role = 'admin'");
+            $notification_msg = "New booking #$booking_number received from " . ($_SESSION['user_name'] ?? 'Customer');
             while ($admin = $adminRes->fetch_assoc()) {
-                executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'New Booking Request', 'New booking #$booking_number received from ' . '" . $_SESSION['user_name'] . "', 'booking')", [$admin['id']], 'i');
+                executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'New Booking Request', ?, 'booking')", [$admin['id'], $notification_msg], 'is');
             }
 
             $conn->commit();
@@ -89,9 +90,54 @@ $page_title = 'Book Service';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $page_title; ?> - AutoCare Connect</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        /* CRITICAL UI FIX - Force Icons Inside */
+        .option-field-container {
+            position: relative !important;
+            display: block !important;
+            width: 100% !important;
+            margin-bottom: 0 !important;
+        }
+        .option-field-container i {
+            position: absolute !important;
+            right: 2.0rem !important; /* Firmly inside the field */
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            pointer-events: none !important;
+            z-index: 50 !important;
+            color: #64748b !important;
+            font-size: 1.25rem !important;
+            margin: 0 !important;
+        }
+        .option-field-container .form-control {
+            padding-right: 5rem !important;
+            width: 100% !important;
+            display: block !important;
+        }
+        /* KILL DUPLICATE ICONS BUT KEEP TEXT */
+        select.form-control {
+            appearance: none !important;
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            background-image: none !important;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 0 !important;
+            position: absolute !important;
+            right: 1rem !important;
+            top: 0 !important;
+            width: 4rem !important; /* Smaller area on the right to trigger picker without hiding text */
+            height: 100% !important;
+            cursor: pointer !important;
+            z-index: 10 !important;
+        }
+        input[type="date"] {
+            color: #111827 !important; /* Force visibility of text */
+        }
+    </style>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
@@ -110,8 +156,8 @@ $page_title = 'Book Service';
                 <?php endif; ?>
 
                 <div class="mb-10">
-                    <h1 class="text-4xl font-black text-gray-900 tracking-tight">Schedule Your Service</h1>
-                    <p class="text-muted font-medium text-lg">Select a vehicle and let our experts handle the rest.</p>
+                    <h1 class="section-header">Schedule Your Service</h1>
+                    <p class="text-muted text-sm mt-1">Select a vehicle and let our experts handle the rest.</p>
                 </div>
 
                 <form method="POST" id="bookingForm" class="space-y-12 pb-20">
@@ -120,7 +166,7 @@ $page_title = 'Book Service';
                     <!-- Vehicle Selection -->
                     <section>
                         <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-xl font-black text-gray-800 flex items-center gap-3">
+                            <h2 class="section-subheader flex items-center gap-3">
                                 <div class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                                     <i class="fa-solid fa-car-side"></i>
                                 </div>
@@ -133,13 +179,13 @@ $page_title = 'Book Service';
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <?php if (empty($vehicles)): ?>
-                                <div class="col-span-full card p-12 text-center border-dashed border-2">
+                                <div class="col-span-full glass-card no-hover p-12 text-center border-dashed border-2">
                                     <p class="text-muted mb-4">You don't have any vehicles in your garage.</p>
                                     <a href="my_vehicles.php" class="btn btn-outline">Add Vehicle Now</a>
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($vehicles as $vehicle): ?>
-                                    <div class="vehicle-select-card card p-6 cursor-pointer transition-all duration-300 border-2 <?php echo ($pre_selected_vehicle == $vehicle['id']) ? 'border-primary bg-primary/5' : 'border-transparent hover:border-gray-200'; ?>" 
+                                    <div class="vehicle-select-card glass-card no-hover p-6 border-2 <?php echo ($pre_selected_vehicle == $vehicle['id']) ? 'border-primary bg-primary/5' : 'border-transparent'; ?>" 
                                          data-vehicle-id="<?php echo $vehicle['id']; ?>"
                                          onclick="toggleVehicleSelection(this, <?php echo $vehicle['id']; ?>)">
                                         <div class="flex items-center gap-4">
@@ -147,11 +193,11 @@ $page_title = 'Book Service';
                                                 <i class="fa-solid fa-car"></i>
                                             </div>
                                             <div class="flex-1">
-                                                <h4 class="font-black text-gray-900"><?php echo htmlspecialchars($vehicle['make'] . ' ' . $vehicle['model']); ?></h4>
+                                                <h4 class="font-bold text-gray-900"><?php echo htmlspecialchars($vehicle['make'] . ' ' . $vehicle['model']); ?></h4>
                                                 <p class="text-[10px] font-black uppercase text-muted tracking-widest mt-1"><?php echo htmlspecialchars($vehicle['license_plate']); ?></p>
                                             </div>
-                                            <div class="selection-indicator w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all <?php echo ($pre_selected_vehicle == $vehicle['id']) ? 'bg-primary border-primary' : 'border-gray-200'; ?>">
-                                                <i class="fa-solid fa-check text-[10px] text-white <?php echo ($pre_selected_vehicle == $vehicle['id']) ? '' : 'hidden'; ?>"></i>
+                                            <div class="selection-indicator w-8 h-8 rounded-full border-2 flex items-center justify-center <?php echo ($pre_selected_vehicle == $vehicle['id']) ? 'bg-primary border-primary' : 'border-gray-200'; ?>">
+                                                <i class="fa-solid fa-check text-xs text-white <?php echo ($pre_selected_vehicle == $vehicle['id']) ? '' : 'hidden'; ?>"></i>
                                             </div>
                                         </div>
                                     </div>
@@ -161,20 +207,20 @@ $page_title = 'Book Service';
                         </div>
                     </section>
 
-                    <!-- Service Details -->
-                    <section class="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                        <div>
-                            <h2 class="text-xl font-black text-gray-800 flex items-center gap-3 mb-6">
+
+                    <!-- Service Options -->
+                    <section>
+                            <h2 class="section-subheader flex items-center gap-3 mb-6">
                                 <div class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                                     <i class="fa-solid fa-screwdriver-wrench"></i>
                                 </div>
                                 2. Service Options
                             </h2>
-                            <div class="card p-8 space-y-6 shadow-xl shadow-gray-100/50">
+                            <div class="glass-card no-hover p-8 space-y-6">
                                 <div class="form-group flex flex-col gap-2">
                                     <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Type of Service</label>
-                                    <div class="relative">
-                                        <select name="service_type" class="form-control h-16 px-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all appearance-none cursor-pointer" required>
+                                    <div class="option-field-container">
+                                        <select name="service_type" class="form-control h-24 pl-8 text-2xl font-extrabold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all cursor-pointer w-full" required>
                                             <option value="" disabled selected>Select from specialties...</option>
                                             <option value="Periodic Maintenance">Periodic Maintenance (Service)</option>
                                             <option value="Engine Repair">Engine Diagnostic & Repair</option>
@@ -183,43 +229,45 @@ $page_title = 'Book Service';
                                             <option value="Bodywork & Painting">Bodywork & Premium Painting</option>
                                             <option value="Suspension Work">Steering & Suspension</option>
                                         </select>
-                                        <i class="fa-solid fa-chevron-down absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"></i>
+                                        <i class="fa-solid fa-chevron-down"></i>
                                     </div>
                                 </div>
 
                                 <div class="form-group flex flex-col gap-2">
                                     <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Preferred Service Date</label>
-                                    <input type="date" name="preferred_date" id="preferredDateInput" class="form-control h-16 px-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all" min="<?php echo date('Y-m-d'); ?>" required>
+                                    <div class="option-field-container">
+                                        <input type="date" name="preferred_date" id="preferredDateInput" class="form-control h-24 pl-8 text-2xl font-extrabold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all cursor-pointer w-full" min="<?php echo date('Y-m-d'); ?>" required>
+                                        <i class="fa-solid fa-calendar-alt"></i>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div>
-                            <h2 class="text-xl font-black text-gray-800 flex items-center gap-3 mb-6">
+                    </section>
+                    
+                    <!-- Additional Instructions -->
+                    <section>
+                            <h2 class="section-subheader flex items-center gap-3 mb-6">
                                 <div class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                                     <i class="fa-solid fa-comment-dots"></i>
                                 </div>
                                 3. Additional Instructions
                             </h2>
-                            <div class="card p-8 shadow-xl shadow-gray-100/50 bg-white h-full flex flex-col">
+                            <div class="glass-card no-hover p-8 flex flex-col">
                                 <div class="form-group flex flex-col gap-2 flex-grow">
                                     <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Service Notes / Issues Reported</label>
-                                    <textarea name="notes" rows="6" class="form-control text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full resize-none flex-grow" placeholder="Describe any specific problems, sounds, or requests you have..."></textarea>
+                                    <textarea name="notes" rows="8" class="form-control text-xl font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full resize-none flex-grow p-8" placeholder="Describe any specific problems, sounds, or requests you have..."></textarea>
                                 </div>
                             </div>
-                        </div>
                     </section>
-
-                    <!-- Valet Pickup & Delivery - Modern Design -->
-                    <section class="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                        <div>
-                            <h2 class="text-xl font-black text-gray-800 flex items-center gap-3 mb-6">
+ 
+                    <!-- Valet Pickup & Delivery -->
+                    <section>
+                        <h2 class="section-subheader flex items-center gap-3 mb-6">
                                 <div class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                                     <i class="fa-solid fa-truck-pickup"></i>
                                 </div>
                                 4. Valet Pickup & Delivery
                             </h2>
-                            <div class="card p-8 space-y-6 shadow-xl shadow-gray-100/50">
+                            <div class="glass-card no-hover p-8 space-y-6">
                                 <!-- Enable Toggle -->
                                 <div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
                                     <div class="flex items-center gap-3">
@@ -229,7 +277,7 @@ $page_title = 'Book Service';
                                             <p class="text-xs text-muted">We'll pick up and deliver your vehicle</p>
                                         </div>
                                     </div>
-                                    <label class="toggle-switch">
+                                    <label class="toggle-switch no-hover">
                                         <input type="checkbox" name="request_pickup" value="1" id="pickupToggle">
                                         <span class="toggle-slider"></span>
                                     </label>
@@ -239,13 +287,13 @@ $page_title = 'Book Service';
                                 <div id="pickupDetails" class="hidden space-y-6 animate-fade-in">
                                     <!-- Contact Phone -->
                                     <div class="form-group flex flex-col gap-2">
-                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Contact Phone</label>
+                                        <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">Contact Phone</label>
                                         <div class="relative">
-                                            <i class="fa-solid fa-phone absolute left-6 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                            <i class="fa-solid fa-phone absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 text-xl"></i>
                                             <input type="tel" 
                                                    name="pickup_phone" 
                                                    value="<?php echo htmlspecialchars($_SESSION['user_phone'] ?? ''); ?>" 
-                                                   class="form-control h-16 pl-14 pr-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
+                                                   class="form-control h-20 pl-16 pr-6 text-xl font-extrabold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
                                                    placeholder="Mobile Number"
                                                    pattern="[0-9]{10}"
                                                    maxlength="10">
@@ -255,88 +303,77 @@ $page_title = 'Book Service';
                                     <!-- Address Input -->
                                     <div class="form-group flex flex-col gap-2">
                                         <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Pickup Address</label>
-                                        <div class="relative">
-                                            <i class="fa-solid fa-location-dot absolute left-6 top-6 text-gray-400"></i>
+                                        
+                                        <!-- Beautiful Colorful Buttons -->
+                                        <div class="grid grid-cols-2 gap-4 mt-2">
+                                            <!-- Current Location Button -->
+                                            <button type="button" 
+                                                    id="useCurrentLocationBtn" 
+                                                    class="btn btn-primary btn-compact flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all">
+                                                <i class="fa-solid fa-location-crosshairs text-lg"></i>
+                                                <span class="text-[10px] uppercase font-black tracking-widest">Use My Location</span>
+                                            </button>
+                                            
+                                            <!-- Choose from Map Button -->
+                                            <button type="button" 
+                                                    id="openMapBtn" 
+                                                    class="btn btn-map btn-compact flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all">
+                                                <i class="fa-solid fa-map-marked-alt text-lg"></i>
+                                                <span class="text-[10px] uppercase font-black tracking-widest">Choose on Map</span>
+                                            </button>
+                                        </div>
+
+                                        <div class="relative mt-4">
+                                            <i class="fa-solid fa-location-dot absolute left-6 top-8 text-gray-500 text-xl"></i>
                                             <textarea name="pickup_address" 
                                                       id="pickupAddressInput" 
-                                                      rows="3"
-                                                      class="form-control pl-14 pr-6 pt-5 text-base font-semibold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full resize-none" 
+                                                      rows="4"
+                                                      class="form-control pl-16 pr-6 pt-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full resize-none" 
                                                       placeholder="House No., Building Name, Street, Area"></textarea>
                                         </div>
                                         <input type="hidden" name="pickup_lat" id="pickupLat">
                                         <input type="hidden" name="pickup_lng" id="pickupLng">
-                                        
-                                        <!-- Beautiful Colorful Buttons -->
-                                        <div class="grid grid-cols-2 gap-4 mt-4">
-                                            <!-- Current Location Button - Blue/Cyan Gradient -->
-                                            <button type="button" 
-                                                    id="useCurrentLocationBtn" 
-                                                    class="group relative px-6 py-5 bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600 text-white rounded-2xl font-bold shadow-[0_8px_0_0_rgb(30,64,175),0_10px_20px_0_rgba(59,130,246,0.5)] hover:shadow-[0_4px_0_0_rgb(30,64,175),0_6px_15px_0_rgba(59,130,246,0.6)] active:shadow-[0_0_0_0_rgb(30,64,175),0_2px_8px_0_rgba(59,130,246,0.4)] hover:translate-y-[4px] active:translate-y-[8px] transition-all duration-200 flex flex-col items-center justify-center gap-2 border-b-4 border-blue-900 overflow-hidden">
-                                                <!-- Shine effect -->
-                                                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                                                <!-- Icon -->
-                                                <div class="relative z-10 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                                    <i class="fa-solid fa-location-crosshairs text-2xl"></i>
-                                                </div>
-                                                <!-- Text -->
-                                                <span class="relative z-10 text-sm">Use Current Location</span>
-                                            </button>
-                                            
-                                            <!-- Choose from Map Button - Green/Emerald Gradient -->
-                                            <button type="button" 
-                                                    id="openMapBtn" 
-                                                    class="group relative px-6 py-5 bg-gradient-to-br from-emerald-400 via-green-500 to-green-600 text-white rounded-2xl font-bold shadow-[0_8px_0_0_rgb(21,128,61),0_10px_20px_0_rgba(34,197,94,0.5)] hover:shadow-[0_4px_0_0_rgb(21,128,61),0_6px_15px_0_rgba(34,197,94,0.6)] active:shadow-[0_0_0_0_rgb(21,128,61),0_2px_8px_0_rgba(34,197,94,0.4)] hover:translate-y-[4px] active:translate-y-[8px] transition-all duration-200 flex flex-col items-center justify-center gap-2 border-b-4 border-green-900 overflow-hidden">
-                                                <!-- Shine effect -->
-                                                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                                                <!-- Icon -->
-                                                <div class="relative z-10 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                                    <i class="fa-solid fa-map-marked-alt text-2xl"></i>
-                                                </div>
-                                                <!-- Text -->
-                                                <span class="relative z-10 text-sm">Choose from Map</span>
-                                            </button>
-                                        </div>
                                     </div>
 
                                     <!-- Landmark -->
                                     <div class="form-group flex flex-col gap-2">
-                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Landmark (Optional)</label>
+                                        <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">Landmark (Optional)</label>
                                         <div class="relative">
-                                            <i class="fa-solid fa-building absolute left-6 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                            <i class="fa-solid fa-building absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 text-xl"></i>
                                             <input type="text" 
                                                    name="pickup_landmark" 
-                                                   class="form-control h-16 pl-14 pr-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
+                                                   class="form-control h-20 pl-16 pr-6 text-xl font-extrabold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
                                                    placeholder="e.g., Near St. Mary's Church">
                                         </div>
                                     </div>
 
                                     <!-- Key Placement -->
                                     <div class="form-group flex flex-col gap-2">
-                                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest">Key Placement & Parking Info</label>
+                                        <label class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">Key Placement & Parking Info</label>
                                         <div class="relative">
-                                            <i class="fa-solid fa-key absolute left-6 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                            <i class="fa-solid fa-key absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 text-xl"></i>
                                             <input type="text" 
                                                    name="pickup_parking" 
-                                                   class="form-control h-16 pl-14 pr-6 text-lg font-bold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
+                                                   class="form-control h-20 pl-16 pr-6 text-xl font-extrabold rounded-2xl bg-gray-50 border-gray-100 focus:bg-white transition-all w-full" 
                                                    placeholder="e.g., Key with security, Plot 12">
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- Info Section - Only show when enabled -->
-                        <div id="infoSection" class="hidden">
-                            <h2 class="text-xl font-black text-gray-800 flex items-center gap-3 mb-6">
+                        </section>
+ 
+                    <!-- Info Section - Only show when enabled -->
+                    <section id="infoSection" class="hidden">
+                            <h2 class="section-subheader flex items-center gap-3 mb-6">
                                 <div class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
                                     <i class="fa-solid fa-circle-info"></i>
                                 </div>
                                 Service Information
                             </h2>
-                            <div class="card p-8 h-full shadow-xl shadow-gray-100/50 space-y-6">
+                            <div class="glass-card no-hover p-8 space-y-6">
                                 <!-- Info Cards -->
                                 <div class="space-y-4">
-                                    <div class="p-5 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-4">
+                                    <div class="p-5 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-4 no-hover">
                                         <div class="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
                                             <i class="fa-solid fa-truck-pickup"></i>
                                         </div>
@@ -346,7 +383,7 @@ $page_title = 'Book Service';
                                         </div>
                                     </div>
 
-                                    <div class="p-5 bg-green-50 rounded-2xl border border-green-100 flex items-start gap-4">
+                                    <div class="p-5 bg-green-50 rounded-2xl border border-green-100 flex items-start gap-4 no-hover">
                                         <div class="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
                                             <i class="fa-solid fa-rotate-left"></i>
                                         </div>
@@ -356,7 +393,7 @@ $page_title = 'Book Service';
                                         </div>
                                     </div>
 
-                                    <div class="p-5 bg-purple-50 rounded-2xl border border-purple-100 flex items-start gap-4">
+                                    <div class="p-5 bg-purple-50 rounded-2xl border border-purple-100 flex items-start gap-4 no-hover">
                                         <div class="w-10 h-10 bg-purple-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
                                             <i class="fa-solid fa-phone-volume"></i>
                                         </div>
@@ -366,7 +403,7 @@ $page_title = 'Book Service';
                                         </div>
                                     </div>
 
-                                    <div class="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4">
+                                    <div class="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4 no-hover">
                                         <div class="w-10 h-10 bg-orange-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
                                             <i class="fa-solid fa-shield-halved"></i>
                                         </div>
@@ -376,7 +413,7 @@ $page_title = 'Book Service';
                                         </div>
                                     </div>
 
-                                    <div class="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-4">
+                                    <div class="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-4 no-hover">
                                         <div class="w-10 h-10 bg-indigo-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
                                             <i class="fa-solid fa-map-pin"></i>
                                         </div>
@@ -395,13 +432,12 @@ $page_title = 'Book Service';
                                     </p>
                                 </div>
                             </div>
-                        </div>
                     </section>
 
 
-                    <div class="flex justify-center gap-6 pt-10">
-                        <button type="submit" class="btn btn-primary h-20 px-24 text-2xl font-black rounded-3xl shadow-2xl shadow-blue-100 transition-all hover:scale-105 active:scale-95 flex items-center gap-4">
-                            Confirm Booking <i class="fa-solid fa-arrow-right-long opacity-50"></i>
+                    <div class="flex justify-center gap-6 pt-12 pb-72 mb-60">
+                        <button type="submit" class="btn btn-primary px-10 py-5 text-xl font-bold shadow-xl flex items-center gap-3 rounded-2xl hover:scale-[1.01] active:scale-[0.99] transition-all group">
+                            Confirm Booking <i class="fa-solid fa-calendar-check text-2xl opacity-80 group-hover:rotate-12 transition-transform"></i>
                         </button>
                     </div>
                 </form>

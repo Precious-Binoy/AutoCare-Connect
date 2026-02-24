@@ -31,24 +31,12 @@ $activeWorkersResult = executeQuery($activeWorkersQuery, [], '');
 $activeWorkers = ($activeWorkersResult && $row = $activeWorkersResult->fetch_assoc()) ? $row['count'] : 0;
 
 // Fetch all bookings with related data
-$bookingsQuery = "SELECT 
-                    b.id,
-                    b.booking_number,
-                    b.status,
-                    b.preferred_date,
-                    b.service_type,
-                    b.mechanic_fee,
-                    b.final_cost as total_bill,
-                    u.name as customer_name,
-                    u.email as customer_email,
-                    CONCAT(v.make, ' ', v.model) as vehicle,
-                    v.license_plate,
-                    m.id as mechanic_id,
-                    mu.name as mechanic_name,
-                    pd.driver_name,
-                    pd.pickup_location_name,
-                    pd.parking_info,
-                    pd.address as pickup_address
+$bookingsQuery = "SELECT b.*, v.make, v.model, v.license_plate, u.name as customer_name, u.email as customer_email, b.payment_status,
+                        m.id as mechanic_id, mu.name as mechanic_name,
+                        pd.driver_name,
+                        pd.pickup_location_name,
+                        pd.parking_info,
+                        pd.address as pickup_address
                   FROM bookings b
                   LEFT JOIN users u ON b.user_id = u.id
                   LEFT JOIN vehicles v ON b.vehicle_id = v.id
@@ -63,6 +51,8 @@ $bookingHistory = [];
 
 if ($bookingsResult) {
     while ($row = $bookingsResult->fetch_assoc()) {
+        // Add 'vehicle' field for consistency with existing code
+        $row['vehicle'] = $row['make'] . ' ' . $row['model'];
         if (in_array($row['status'], ['completed', 'delivered', 'cancelled'])) {
             $bookingHistory[] = $row;
         } else {
@@ -298,13 +288,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Date</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Status</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Assignee Info</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Payment</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Logistics Summary</th>
                                 </tr>
                             </thead>
                             <tbody class="text-sm">
                                 <?php if (empty($activeBookings)): ?>
                                     <tr>
-                                        <td colspan="7" class="p-4 text-center text-muted italic">No active bookings under management.</td>
+                                        <td colspan="8" class="p-4 text-center text-muted italic">No active bookings under management.</td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($activeBookings as $booking): ?>
@@ -352,6 +343,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                         </button>
                                                     </form>
                                                 <?php endif; ?>
+                                            </td>
+                                            <td class="p-4">
+                                                <div class="text-[10px] font-bold text-gray-700">
+                                                    <?php if ($booking['payment_status'] === 'paid'): ?>
+                                                        <span class="text-success"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                                                    <?php elseif ($booking['is_billed']): ?>
+                                                        <span class="text-warning"><i class="fa-solid fa-clock"></i> Pending (₹<?php echo number_format($booking['final_cost']); ?>)</span>
+                                                    <?php else: ?>
+                                                        <span class="text-muted italic">Not Billed</span>
+                                                    <?php endif; ?>
+                                                </div>
                                             </td>
                                             <td class="p-4">
                                                 <?php 
@@ -463,7 +465,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Date/Time</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Status</th>
                                     <th class="p-4 text-xs font-semibold text-muted uppercase">Assignee Info</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase" colspan="2">Logistics Summary</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Payment</th>
+                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Logistics Summary</th>
                                 </tr>
                             </thead>
                             <tbody class="text-sm">
@@ -497,7 +500,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                     <?php echo $booking['mechanic_name'] ? htmlspecialchars($booking['mechanic_name']) : 'Not Assigned'; ?>
                                                 </div>
                                             </td>
-                                             <td class="p-4 text-xs" colspan="2">
+                                             <td class="p-4">
+                                                <div class="text-[10px] font-bold text-gray-700">
+                                                    <?php if ($booking['payment_status'] === 'paid'): ?>
+                                                        <span class="text-success"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                                                    <?php elseif ($booking['is_billed']): ?>
+                                                        <span class="text-warning"><i class="fa-solid fa-clock"></i> Pending (₹<?php echo number_format($booking['final_cost']); ?>)</span>
+                                                    <?php else: ?>
+                                                        <span class="text-muted italic">Not Billed</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </td>
+                                             <td class="p-4 text-xs">
                                                  <div class="flex gap-4">
                                                      <?php 
                                                         $pdQuery = "SELECT * FROM pickup_delivery WHERE booking_id = ?";

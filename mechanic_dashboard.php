@@ -61,6 +61,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
         }
     }
 
+
+    if (empty($error_msg)) {
+        // DOB Validation
+        if (!empty($dob)) {
+            $dobDate = new DateTime($dob);
+            $today = new DateTime();
+            $age = $today->diff($dobDate)->y;
+            
+            if ($dobDate > $today) {
+                $error_msg = "Date of birth cannot be in the future.";
+            } elseif ($age < 18) {
+                $error_msg = "You must be at least 18 years old.";
+            }
+        }
+    }
+
     if (empty($error_msg)) {
         $conn->begin_transaction();
         try {
@@ -69,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
             executeQuery($updateUserQuery, [$name, $phone, $profile_image_path, $dob, $address, $user_id], 'sssssi');
             $_SESSION['user_name'] = $name;
             $_SESSION['user_phone'] = $phone;
+            $_SESSION['profile_image'] = $profile_image_path;
 
             // Update mechanics table
             $updateMechanicQuery = "UPDATE mechanics SET specialization = ?, years_experience = ? WHERE user_id = ?";
@@ -143,21 +160,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             $insertUpdateQuery = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, ?, ?, ?, ?)";
             executeQuery($insertUpdateQuery, [$booking_id, $finalStatus, $finalMsg, 100, $user_id], 'issii');
 
-            // Notify Driver (if pickup/delivery exists)
+            // Notify Admin & Customer (if pickup/delivery exists)
             if ($hasPickupDelivery) {
-                // Find assigned driver for delivery (simplified: notify all available drivers or specific one if logic existed)
-                // For now, notify Admin as they manage logistics
-                $adminRes = $conn->query("SELECT id FROM users WHERE role = 'admin'");
-                while ($admin = $adminRes->fetch_assoc()) {
-                     executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'Service Completed', 'Mechanic has completed service for Booking #$booking_id. Ready for delivery.', 'general')", [$admin['id']], 'i');
-                }
+                $notifTitle = 'Serice Completed';
+                $notifMsg = "Mechanic has completed service for Booking #$booking_id. Ready for delivery.";
+                notifyAdmins($notifTitle, $notifMsg, 'service');
             } else {
                  // Notify Customer directly if no delivery
                  $custQuery = "SELECT user_id FROM bookings WHERE id = ?";
                  $custRes = executeQuery($custQuery, [$booking_id], 'i');
                  if ($cust = $custRes->fetch_assoc()) {
                      $notifMsg = "Your vehicle service is complete and ready for pickup!";
-                     executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'Service Completed', ?, 'general')", [$cust['user_id'], $notifMsg], 'is');
+                     notifyCustomer($cust['user_id'], 'Service Completed', $notifMsg, 'service');
                  }
             }
 
@@ -171,6 +185,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             // Insert service update
             $insertUpdateQuery = "INSERT INTO service_updates (booking_id, status, message, progress_percentage, updated_by) VALUES (?, ?, ?, ?, ?)";
             executeQuery($insertUpdateQuery, [$booking_id, $new_status, "Work started on the vehicle.", 50, $user_id], 'issii');
+
+            // Notify Customer - Work Started
+            $custQ = "SELECT user_id FROM bookings WHERE id = ?";
+            $custR = executeQuery($custQ, [$booking_id], 'i');
+            if ($cust = $custR->fetch_assoc()) {
+                notifyCustomer($cust['user_id'], '⚙️ Work Started', 'Your mechanic has started working on your vehicle.', 'service');
+            }
         }
         
         $conn->commit();
@@ -209,6 +230,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_job'])) {
                 
                 $conn->commit();
                 $success_msg = "Job accepted successfully! You are now assigned to this booking.";
+
+                // Notify Customer
+                $custQ = "SELECT user_id FROM bookings WHERE id = ?";
+                $custR = executeQuery($custQ, [$booking_id], 'i');
+                if ($cust = $custR->fetch_assoc()) {
+                    notifyCustomer($cust['user_id'], '🔧 Mechanic Assigned', 'A mechanic has been assigned to your vehicle and will begin work shortly.', 'service');
+                }
             } else {
                 $conn->rollback();
                 $error_msg = "This job has already been assigned to another mechanic.";
@@ -420,18 +448,18 @@ $page_title = 'Mechanic Dashboard';
                                             </div>
                                         </div>
                                         
-                                        <div class="p-6 bg-gray-50 border-t border-gray-100">
+                                        <div class="p-8 bg-gray-50/50 border-t border-gray-100">
                                             <?php if ($job['status'] === 'confirmed' || $job['status'] === 'pending'): ?>
                                                  <form method="POST">
                                                      <input type="hidden" name="booking_id" value="<?php echo $job['id']; ?>">
                                                      <input type="hidden" name="status" value="in_progress">
-                                                     <button type="submit" name="update_status" class="btn btn-primary w-full py-3.5 font-bold shadow-lg shadow-blue-500/20 rounded-xl hover:scale-[1.02] transition-transform">
+                                                     <button type="submit" name="update_status" class="btn btn-primary w-full py-4 font-bold shadow-lg shadow-blue-500/20 rounded-xl hover:scale-[1.01] transition-all">
                                                          <i class="fa-solid fa-play mr-2"></i> Start Diagnosis / Repair
                                                      </button>
                                                  </form>
                                              <?php elseif ($job['status'] === 'in_progress'): ?>
-                                                <button class="btn btn-success w-full py-3.5 font-bold shadow-lg shadow-green-500/20 rounded-xl hover:scale-[1.02] transition-transform" onclick="openCompleteModal(<?php echo $job['id']; ?>)">
-                                                    <i class="fa-solid fa-check-to-slot mr-2"></i> Finalize & Generate Bill
+                                                <button class="btn btn-success w-full py-4 font-bold shadow-lg shadow-emerald-500/20 rounded-xl hover:scale-[1.01] transition-all" onclick="openCompleteModal(<?php echo $job['id']; ?>)">
+                                                    <i class="fa-solid fa-file-invoice-dollar mr-2"></i> Finalize & Generate Bill
                                                 </button>
                                             <?php endif; ?>
                                         </div>
@@ -524,63 +552,80 @@ $page_title = 'Mechanic Dashboard';
                     <?php endif; ?>
 
                 <?php elseif ($activeTab === 'history'): ?>
-                    <!-- History Section -->
-                    <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                        <div>
-                            <h1 class="text-3xl font-bold text-gray-900">Work History</h1>
-                            <p class="text-muted">Tracking your professional service journey.</p>
-                        </div>
-                        <div class="px-6 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
-                            <i class="fa-solid fa-clipboard-check text-primary"></i>
-                            <div>
-                                <span class="text-lg font-black text-gray-900"><?php echo count($history); ?></span>
-                                <span class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-tighter">Completed Jobs</span>
+                    <div class="animate-fade-in">
+                        <!-- Centered History Header -->
+                        <div class="text-center mb-20 relative z-20">
+                            <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Work History</h1>
+                            <p class="text-slate-500 font-medium mt-1">Tracking your professional service journey.</p>
+                            
+                            <div class="mt-8 inline-flex px-6 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm items-center gap-3 mx-auto">
+                                <i class="fa-solid fa-clipboard-check text-primary"></i>
+                                <div>
+                                    <span class="text-lg font-black text-gray-900"><?php echo count($history); ?></span>
+                                    <span class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-wider">Completed Jobs</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="card p-0 overflow-hidden">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left">
-                                <thead style="background: #F8FAFC; border-bottom: 1px solid var(--border);">
-                                    <tr class="text-xs font-bold uppercase text-muted tracking-wider">
-                                        <th class="p-5">Completed Date</th>
-                                        <th class="p-5">Vehicle & Customer</th>
-                                        <th class="p-5">Service Type</th>
-                                        <th class="p-5">Service Bill</th>
-                                        <th class="p-5 text-right">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="text-sm">
-                                    <?php if (empty($history)): ?>
-                                        <tr>
-                                            <td colspan="5" class="p-16 text-center text-muted">
-                                                <i class="fa-solid fa-clock-rotate-left text-6xl mb-4 opacity-10"></i>
-                                                <p>No completed jobs in your history yet.</p>
-                                            </td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($history as $h): ?>
-                                            <tr class="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
-                                                <td class="p-5 font-medium text-gray-500">
-                                                    <?php echo date('M d, Y', strtotime($h['updated_at'])); ?>
-                                                </td>
-                                                <td class="p-5">
-                                                    <div class="font-bold text-gray-900"><?php echo $h['year'] . ' ' . $h['make'] . ' ' . $h['model']; ?></div>
-                                                    <div class="text-xs text-muted font-medium"><?php echo htmlspecialchars($h['customer_name']); ?></div>
-                                                </td>
-                                                <td class="p-5 text-gray-700"><?php echo htmlspecialchars($h['service_type']); ?></td>
-                                                <td class="p-5 font-black text-gray-900">₹<?php echo number_format($h['bill_amount'] ?? 0, 2); ?></td>
-                                                <td class="p-5 text-right">
-                                                    <span class="badge <?php echo getStatusBadgeClass($h['status']); ?> px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                                        <?php echo formatStatusLabel($h['status']); ?>
-                                                    </span>
-                                                </td>
+                        
+                        <div class="max-w-6xl mx-auto">
+                            <div class="card p-0 overflow-hidden bg-white rounded-xl border border-gray-100 shadow-sm">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-center">
+                                        <thead style="background: #F8FAFC; border-bottom: 1px solid #e2e8f0;">
+                                            <tr class="text-xs font-bold uppercase text-muted tracking-wider">
+                                                <th class="p-5 text-center">Completed Date</th>
+                                                <th class="p-5 text-center">Vehicle & Customer</th>
+                                                <th class="p-5 text-center">Service Type</th>
+                                                <th class="p-5 text-center">Service Bill</th>
+                                                <th class="p-5 text-center">Status</th>
                                             </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
+                                        </thead>
+                                        <tbody class="text-sm">
+                                            <?php if (empty($history)): ?>
+                                                <tr>
+                                                    <td colspan="5" class="p-16 text-center text-muted">
+                                                        <i class="fa-solid fa-clock-rotate-left text-6xl mb-4 opacity-10"></i>
+                                                        <p>No completed jobs in your history yet.</p>
+                                                    </td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php foreach ($history as $h): 
+                                                    // Vehicle Sanitization filter
+                                                    $rawParts = [
+                                                        'year'  => trim($h['year'] ?? ''),
+                                                        'make'  => trim($h['make'] ?? ''),
+                                                        'model' => trim($h['model'] ?? ''),
+                                                    ];
+                                                    $cleanParts = [];
+                                                    foreach ($rawParts as $p) {
+                                                        if ($p !== '' && $p !== '0' && strtolower($p) !== 'null' && strtolower($p) !== 'n/a') {
+                                                            $cleanParts[] = $p;
+                                                        }
+                                                    }
+                                                    $vehicleTitle = implode(' ', $cleanParts) ?: 'Vehicle Details';
+                                                ?>
+                                                    <tr class="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
+                                                        <td class="p-5 font-medium text-gray-500">
+                                                            <?php echo date('M d, Y', strtotime($h['updated_at'])); ?>
+                                                        </td>
+                                                        <td class="p-5">
+                                                            <div class="font-bold text-gray-900"><?php echo htmlspecialchars($vehicleTitle); ?></div>
+                                                            <div class="text-xs text-muted font-medium"><?php echo htmlspecialchars($h['customer_name']); ?></div>
+                                                        </td>
+                                                        <td class="p-5 text-gray-700"><?php echo htmlspecialchars($h['service_type']); ?></td>
+                                                        <td class="p-5 font-black text-gray-900">₹<?php echo number_format($h['bill_amount'] ?? 0, 2); ?></td>
+                                                        <td class="p-5">
+                                                            <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold uppercase">
+                                                                Completed
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

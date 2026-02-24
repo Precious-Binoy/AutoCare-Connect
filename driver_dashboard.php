@@ -177,6 +177,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     }
 
     if (empty($error_msg)) {
+        // DOB Validation
+        if (!empty($dob)) {
+            $dobDate = new DateTime($dob);
+            $today = new DateTime();
+            $age = $today->diff($dobDate)->y;
+            
+            if ($dobDate > $today) {
+                $error_msg = "Date of birth cannot be in the future.";
+            } elseif ($age < 18) {
+                $error_msg = "You must be at least 18 years old.";
+            }
+        }
+    }
+
+    if (empty($error_msg)) {
         $conn->begin_transaction();
         try {
             // Update users table
@@ -184,6 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
             executeQuery($updateUserQuery, [$name, $phone, $profile_image_path, $dob, $address, $user_id], 'sssssi');
             $_SESSION['user_name'] = $name;
             $_SESSION['user_phone'] = $phone;
+            $_SESSION['profile_image'] = $profile_image_path;
 
             // Update drivers table
             $updateDriverQuery = "UPDATE drivers SET license_number = ?, vehicle_number = ? WHERE user_id = ?";
@@ -353,6 +369,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_mission'])) {
         
         $conn->commit();
         $success_msg = "Mission started! Drive safely.";
+
+        // Notify Customer - Driver En Route
+        $bQuery = "SELECT user_id FROM bookings WHERE id = ?";
+        $bRes = executeQuery($bQuery, [$bookingId], 'i');
+        if ($bRow = $bRes->fetch_assoc()) {
+            executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, '🚗 Driver En Route', 'Your driver is on the way to you. Please stay available!', 'service')", [$bRow['user_id']], 'i');
+        }
         
         header("Location: driver_dashboard.php?tab=jobs&subtab=active");
         exit;
@@ -419,6 +442,94 @@ $page_title = 'Driver Dashboard';
     <title><?php echo $page_title; ?> - AutoCare Connect</title>
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Premium Pro Action Buttons */
+        .btn-premium {
+            background-color: #111827 !important; /* Deep Silk Black */
+            color: #ffffff !important;
+            border-radius: 14px !important;
+            font-weight: 900 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            text-decoration: none !important;
+        }
+
+        .btn-premium:hover {
+            background-color: #000000 !important;
+            transform: scale(1.05) translateY(-2px) !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1) !important;
+            border-color: rgba(255, 255, 255, 0.2) !important;
+        }
+
+        .btn-premium:active {
+            transform: scale(0.98) !important;
+        }
+
+        .btn-premium i {
+            transition: transform 0.3s ease !important;
+        }
+
+        .btn-premium:hover i {
+            transform: scale(1.2) rotate(5deg) !important;
+        }
+
+        .btn-premium-outline {
+            background-color: #ffffff !important;
+            color: #111827 !important;
+            border: 2px solid #e5e7eb !important;
+            border-radius: 14px !important;
+            font-weight: 900 !important;
+            text-transform: uppercase !important;
+            transition: all 0.3s ease !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            text-decoration: none !important;
+        }
+
+        .btn-premium-outline:hover {
+            border-color: #3b82f6 !important;
+            background-color: #f9fafb !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+        }
+
+        .btn-premium-emerald {
+            background-color: #059669 !important;
+            color: #ffffff !important;
+            border-radius: 14px !important;
+            font-weight: 900 !important;
+            text-transform: uppercase !important;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+            box-shadow: 0 10px 15px -3px rgba(5, 150, 105, 0.2) !important;
+            border: none !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+        }
+
+        .btn-premium-emerald:hover {
+            background-color: #047857 !important;
+            transform: scale(1.05) translateY(-2px) !important;
+            box-shadow: 0 20px 25px -5px rgba(5, 150, 105, 0.3) !important;
+        }
+    </style>
+    <?php
+    // Helper to clean coordinates for Google Maps
+    function cleanCoords($str) {
+        if (empty($str)) return '';
+        // Remove "Lat:", "Lng:", spaces, and other text labels
+        return preg_replace('/[a-zA-Z:\s]/', '', $str);
+    }
+    ?>
 </head>
 <body>
     <div class="dashboard-wrapper">
@@ -487,103 +598,121 @@ $page_title = 'Driver Dashboard';
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($activeJobs as $job): ?>
-                                    <div class="card overflow-hidden hover:shadow-2xl transition-all duration-300 group relative border-0 shadow-lg">
-                                        <div class="absolute top-0 w-full h-1.5 bg-gradient-to-r from-blue-600 to-indigo-700"></div>
-                                        <div class="flex flex-col h-full">
-                                            <div class="p-8 flex-1">
-                                                <div class="flex justify-between items-start mb-6">
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="badge bg-green-50 text-green-600 border border-green-100 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm">
-                                                            <i class="fa-solid fa-circle text-[6px] mr-1.5 animate-pulse"></i> Live Mission
-                                                        </span>
-                                                    </div>
-                                                    <span class="font-mono text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">#<?php echo $job['booking_number']; ?></span>
-                                                </div>
-                                                
-                                                <h3 class="text-2xl md:text-3xl font-black text-gray-900 mb-2 leading-tight">
-                                                    <?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?>
-                                                </h3>
-                                                
-                                                <div class="flex flex-wrap gap-3 mb-6">
-                                                    <div class="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-                                                        <i class="fa-solid fa-user text-primary/70"></i> <?php echo htmlspecialchars($job['customer_name']); ?>
-                                                    </div>
-                                                    <?php if(!empty($job['customer_phone'])): ?>
-                                                        <div class="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100 font-mono">
-                                                            <i class="fa-solid fa-phone text-primary/70"></i> <?php echo htmlspecialchars($job['customer_phone']); ?>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                    <div class="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100 font-mono">
-                                                        <i class="fa-solid fa-hashtag text-primary/70"></i> <?php echo htmlspecialchars($job['license_plate']); ?>
-                                                    </div>
-                                                    <span class="px-3 py-1.5 rounded-full text-[10px] font-black uppercase bg-blue-50 text-blue-600 border border-blue-100">
-                                                        <?php echo ucfirst($job['type']); ?> Phase
-                                                    </span>
-                                                </div>
+    <div class="max-w-4xl mx-auto mb-8">
+        <div class="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden relative p-8">
+            <!-- Reference Header -->
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-2 px-3 py-1 bg-green-50 rounded-full border border-green-100">
+                    <span class="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
+                    <span class="text-[10px] font-black text-green-700 uppercase tracking-widest">Live Mission</span>
+                </div>
+                <div class="text-[14px] font-black text-slate-700 tracking-tight">#BK-<?php echo substr(strtoupper(md5($job['booking_number'])), 0, 6); ?></div>
+            </div>
 
-                                                <div class="bg-blue-50/50 p-6 rounded-2xl border border-blue-50 flex flex-col gap-4 transition-colors group-hover:bg-blue-50">
-                                                    <div class="flex items-start gap-4">
-                                                        <div class="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-primary shrink-0">
-                                                            <i class="fa-solid fa-location-dot"></i>
-                                                        </div>
-                                                        <div>
-                                                            <div class="text-[10px] uppercase font-bold text-blue-400 mb-1 tracking-wider">Destination Target</div>
-                                                            <div class="font-bold text-gray-900 text-sm md:text-base leading-snug"><?php echo htmlspecialchars($job['address']); ?></div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div class="flex flex-wrap gap-2 ml-14">
-                                                        <?php if(!empty($job['landmark'])): ?>
-                                                            <div class="text-[10px] font-bold text-gray-500 uppercase bg-white/80 px-2 py-1 rounded-lg border border-gray-100">
-                                                                <i class="fa-solid fa-building mr-1 opacity-50"></i> <?php echo htmlspecialchars($job['landmark']); ?>
-                                                            </div>
-                                                        <?php endif; ?>
-                                                        <?php if(!empty($job['parking_info'])): ?>
-                                                            <div class="text-[10px] font-bold text-blue-500 uppercase bg-white/80 px-2 py-1 rounded-lg border border-blue-100">
-                                                                <i class="fa-solid fa-info-circle mr-1 opacity-50"></i> <?php echo htmlspecialchars($job['parking_info']); ?>
-                                                            </div>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="p-6 bg-gray-50 border-t border-gray-100">
-                                                <div class="flex flex-wrap items-center gap-3">
-                                                    <?php 
-                                                        $nav_url = "https://www.google.com/maps/search/?api=1&query=";
-                                                        if (!empty($job['lat']) && !empty($job['lng'])) {
-                                                            $nav_url .= $job['lat'] . "," . $job['lng'];
-                                                        } else {
-                                                            $nav_url .= urlencode($job['address']);
-                                                        }
-                                                    ?>
-                                                    <a href="<?php echo $nav_url; ?>" target="_blank" class="flex-1 btn btn-primary py-3.5 font-bold shadow-lg shadow-blue-500/20 rounded-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
-                                                        <i class="fa-solid fa-location-arrow"></i> Navigate
-                                                    </a>
-                                                    
-                                                    <a href="tel:<?php echo htmlspecialchars($job['customer_phone'] ?? ''); ?>" class="flex-1 btn bg-white border border-gray-200 text-gray-800 py-3.5 font-bold rounded-xl hover:bg-gray-50 hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
-                                                        <i class="fa-solid fa-phone"></i> Call Client
-                                                    </a>
-                                                    
-                                                    <?php if ($job['status'] === 'scheduled'): ?>
-                                                        <form method="POST" class="w-full mt-3">
-                                                            <input type="hidden" name="start_mission" value="1">
-                                                            <input type="hidden" name="booking_id" value="<?php echo $job['booking_id']; ?>">
-                                                            <input type="hidden" name="request_id" value="<?php echo $job['id']; ?>">
-                                                            <button type="submit" class="btn btn-primary w-full py-4 text-sm font-black rounded-xl shadow-xl shadow-blue-600/20 uppercase tracking-widest">
-                                                                <i class="fa-solid fa-play mr-2"></i> Confirm Start
-                                                            </button>
-                                                        </form>
-                                                    <?php else: ?>
-                                                        <button type="button" class="w-full mt-3 btn btn-success py-4 text-sm font-black rounded-xl shadow-xl shadow-green-600/20 uppercase tracking-widest"
-                                                                onclick="openDriverCompleteModal(<?php echo $job['booking_id']; ?>, <?php echo $job['id']; ?>, '<?php echo $job['type']; ?>')">
-                                                            <i class="fa-solid fa-flag-checkered mr-2"></i> Complete Mission
-                                                        </button>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+            <!-- Vehicle Title & Plate -->
+            <div class="mb-8">
+                <h2 class="text-2xl font-black text-slate-800 leading-tight"><?php echo htmlspecialchars($job['color'] . ' ' . $job['year'] . ' ' . $job['make'] . ' ' . $job['model']); ?></h2>
+                <div class="text-[14px] font-black text-blue-600 mt-1 uppercase tracking-widest">
+                    PLATE: <?php echo htmlspecialchars($job['license_plate']); ?>
+                </div>
+            </div>
+
+            <!-- Simplified Customer Details Row Header -->
+            <div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">Customer Details</div>
+
+            <!-- Info Rows (Simplified & Colored) -->
+            <div class="space-y-4 mb-8">
+                <!-- Customer Row -->
+                <div class="flex items-center gap-4">
+                    <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-user text-sm"></i></div>
+                    <div class="text-base font-black text-blue-600 uppercase">
+                        <?php echo htmlspecialchars(strtoupper($job['customer_name'])); ?>
+                    </div>
+                </div>
+
+                <!-- Phone Row -->
+                <div class="flex items-center gap-4">
+                    <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-phone text-sm"></i></div>
+                    <div class="text-base font-black text-blue-600">
+                        <?php echo htmlspecialchars($job['customer_phone']); ?>
+                    </div>
+                </div>
+
+                <!-- Mission Phase Row -->
+                <div class="flex items-center gap-4 pt-2">
+                    <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-truck text-sm"></i></div>
+                    <div class="text-[11px] font-black text-slate-800 uppercase tracking-widest">
+                        Phase: <span class="text-blue-600"><?php echo htmlspecialchars($job['type']); ?></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Destination Target -->
+            <div class="flex items-start gap-4 mb-6">
+                <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
+                    <i class="fa-solid fa-location-dot"></i>
+                </div>
+                <div>
+                    <div class="text-[12px] font-black text-slate-800 uppercase tracking-tight mb-1">Destination Target</div>
+                    <div class="text-sm font-bold text-slate-600 leading-snug">
+                        <?php 
+                        if (!empty($job['lat']) && !empty($job['lng'])) {
+                            echo "Lat: " . $job['lat'] . ", Lng: " . $job['lng'];
+                        } else {
+                            echo htmlspecialchars($job['address']);
+                        }
+                        ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Extra Info Row (Lowercase, Small, Grey) -->
+            <div class="flex flex-wrap items-center gap-6 mb-2">
+                <div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 lowercase italic opacity-80">
+                    <i class="fa-solid fa-building text-[9px]"></i>
+                    <?php echo !empty($job['landmark']) ? htmlspecialchars(strtolower($job['landmark'])) : 'near the location'; ?>
+                </div>
+                <div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 lowercase italic opacity-80">
+                    <i class="fa-solid fa-key text-[9px]"></i>
+                    key placement inside the car
+                </div>
+            </div>
+
+            <!-- Footer Toolbar (Premium Pro Action Buttons) -->
+            <div class="mt-8 pt-4 -mx-8 -mb-8 px-8 py-5 bg-slate-50 border-t border-slate-100 flex items-center gap-4">
+                <?php 
+                $navQuery = (!empty($job['lat']) && !empty($job['lng'])) 
+                    ? cleanCoords($job['lat']) . ',' . cleanCoords($job['lng']) 
+                    : urlencode($job['address']);
+                ?>
+                <a href="https://www.google.com/maps/dir/?api=1&destination=<?php echo $navQuery; ?>" target="_blank" class="btn-premium flex-none h-14 px-8 w-auto">
+                    <i class="fa-solid fa-diamond-turn-right text-lg text-blue-400 mr-3"></i> Navigate
+                </a>
+                
+                <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="btn-premium-outline flex-none h-14 px-8 w-auto">
+                    <i class="fa-solid fa-phone text-lg mr-3"></i> Call client
+                </a>
+                
+                <div class="flex-1">
+                    <?php if ($job['status'] === 'scheduled'): ?>
+                        <form method="POST" class="m-0">
+                            <input type="hidden" name="start_mission" value="1">
+                            <input type="hidden" name="booking_id" value="<?php echo $job['booking_id']; ?>">
+                            <input type="hidden" name="request_id" value="<?php echo $job['id']; ?>">
+                            <button type="submit" class="btn-premium w-full h-14 border-none">
+                                <i class="fa-solid fa-play text-lg text-blue-400 mr-3"></i> Confirm Start
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <button type="button" class="btn-premium-emerald w-full h-14"
+                                onclick="openDriverCompleteModal(<?php echo $job['booking_id']; ?>, <?php echo $job['id']; ?>, '<?php echo $job['type']; ?>')">
+                            <i class="fa-solid fa-flag-checkered text-lg mr-3"></i> Confirm Finish
+                        </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>
                         </div>
@@ -601,70 +730,71 @@ $page_title = 'Driver Dashboard';
                                 </div>
                             <?php else: ?>
                                 <?php foreach ($availableJobs as $job): ?>
-                                    <div class="card overflow-hidden hover:shadow-2xl transition-all duration-300 group relative border-0 shadow-lg">
-                                        <div class="absolute top-0 w-full h-1.5 bg-gradient-to-r from-green-500 to-teal-600"></div>
-                                        <div class="p-8 flex flex-col h-full">
-                                            <div class="flex justify-between items-start mb-6">
-                                                <span class="badge bg-green-50 text-green-600 border border-green-100 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-2">
-                                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce"></span> New Request
-                                                </span>
-                                                <div class="text-right">
-                                                    <span class="text-[10px] text-muted font-bold block">Received</span>
-                                                    <span class="text-xs font-bold text-gray-700"><?php echo date('M d, H:i', strtotime($job['request_date'])); ?></span>
+                                    <div class="max-w-4xl mx-auto mb-8">
+                                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden relative p-8 group hover:border-blue-200 transition-all">
+                                            <!-- Available Header -->
+                                            <div class="flex justify-between items-center mb-6">
+                                                <div class="flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100">
+                                                    <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                                    <span class="text-[10px] font-black text-emerald-700 uppercase tracking-widest">New Mission</span>
+                                                </div>
+                                                <div class="text-[14px] font-black text-slate-400 tracking-tight">#REQ-<?php echo $job['id']; ?></div>
+                                            </div>
+
+                                            <!-- Vehicle Title & Plate -->
+                                            <div class="mb-8">
+                                                <h2 class="text-2xl font-black text-slate-800 leading-tight"><?php echo htmlspecialchars($job['color'] . ' ' . $job['make'] . ' ' . $job['model']); ?></h2>
+                                                <div class="text-[14px] font-black text-blue-600 mt-1 uppercase tracking-widest">
+                                                    PLATE: <?php echo htmlspecialchars($job['license_plate']); ?>
                                                 </div>
                                             </div>
-                                            
-                                            <div class="flex items-center gap-4 mb-6">
-                                                <div class="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 text-2xl shadow-inner">
-                                                    <i class="fa-solid fa-car"></i>
+
+                                            <!-- Simplified Customer Details Row Header -->
+                                            <div class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-50 pb-2">Customer Details</div>
+
+                                            <!-- Info Rows (Simplified & Colored) -->
+                                            <div class="space-y-4 mb-8">
+                                                <!-- Customer Row -->
+                                                <div class="flex items-center gap-4">
+                                                    <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-user text-sm"></i></div>
+                                                    <div class="text-base font-black text-blue-600 uppercase">
+                                                        <?php echo htmlspecialchars(strtoupper($job['customer_name'])); ?>
+                                                    </div>
                                                 </div>
-                                                <div class="flex-1 min-w-0">
-                                                    <h3 class="text-xl md:text-2xl font-black text-gray-900 leading-tight truncate">
-                                                        <?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?>
-                                                    </h3>
-                                                    <div class="flex gap-2 mt-1">
-                                                        <span class="text-[10px] font-mono font-bold text-gray-500 bg-gray-50 px-2.5 py-1 rounded border border-gray-100">
-                                                            <?php echo htmlspecialchars($job['license_plate']); ?>
-                                                        </span>
-                                                        <span class="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-100">
-                                                            <?php echo $job['type']; ?>
-                                                        </span>
+
+                                                <!-- Mission Phase Row -->
+                                                <div class="flex items-center gap-4 pt-2">
+                                                    <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-screwdriver-wrench text-sm"></i></div>
+                                                    <div class="text-[11px] font-black text-slate-800 uppercase tracking-widest">
+                                                        Service: <span class="text-emerald-600"><?php echo htmlspecialchars($job['type']); ?></span>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div class="flex items-center justify-between mb-6 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                                                <div class="flex flex-col gap-1">
-                                                    <label class="text-[9px] uppercase font-bold text-muted tracking-widest">Customer</label>
-                                                    <div class="text-sm font-black text-gray-900"><?php echo htmlspecialchars($job['customer_name']); ?></div>
-                                                    <?php if(!empty($job['customer_phone'])): ?>
-                                                        <div class="text-[11px] font-bold text-blue-600"><?php echo htmlspecialchars($job['customer_phone']); ?></div>
-                                                    <?php endif; ?>
+                                            <!-- Pickup Target -->
+                                            <div class="flex items-start gap-4 mb-6">
+                                                <div class="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                                                    <i class="fa-solid fa-location-dot"></i>
                                                 </div>
-                                                <?php if(!empty($job['customer_phone'])): ?>
-                                                    <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-sm">
-                                                        <i class="fa-solid fa-phone"></i>
-                                                    </a>
-                                                <?php endif; ?>
+                                                <div>
+                                                    <div class="text-[12px] font-black text-slate-800 uppercase tracking-tight mb-1">Pickup Location</div>
+                                                    <div class="text-sm font-bold text-slate-600 tracking-tight leading-snug">
+                                                        <?php echo htmlspecialchars($job['address']); ?>
+                                                    </div>
+                                                </div>
                                             </div>
 
-                                            <div class="bg-gray-50/80 p-5 rounded-2xl border border-gray-100 mb-6 flex-1">
-                                                <label class="text-[10px] uppercase font-bold text-muted mb-2 block tracking-widest flex items-center gap-2">
-                                                    <i class="fa-solid fa-location-dot text-red-400"></i> Pickup/Drop Location
-                                                </label>
-                                                <p class="text-sm font-bold text-gray-800 line-clamp-2 leading-relaxed">
-                                                    <?php echo htmlspecialchars($job['address']); ?>
-                                                </p>
+                                            <!-- Action Footer (High-Impact Premium Button) -->
+                                            <div class="mt-8 pt-4 -mx-8 -mb-8 px-8 py-5 bg-slate-50 border-t border-slate-100">
+                                                <form method="POST" onsubmit="return confirm('Accept this job?');" class="m-0">
+                                                    <input type="hidden" name="action" value="accept_job">
+                                                    <input type="hidden" name="booking_id" value="<?php echo $job['booking_id']; ?>">
+                                                    <input type="hidden" name="request_id" value="<?php echo $job['id']; ?>">
+                                                    <button type="submit" name="accept_job" class="btn-premium w-full h-14 border-none py-0">
+                                                        <i class="fa-solid fa-check-circle text-lg text-emerald-400 mr-3"></i> Accept Mission Assignment
+                                                    </button>
+                                                </form>
                                             </div>
-                                            
-                                            <form method="POST" onsubmit="return confirm('Accept this job? You will be marked as ON DUTY.');">
-                                                <input type="hidden" name="action" value="accept_job">
-                                                <input type="hidden" name="booking_id" value="<?php echo $job['booking_id']; ?>">
-                                                <input type="hidden" name="request_id" value="<?php echo $job['id']; ?>">
-                                                <button type="submit" name="accept_job" class="btn btn-primary w-full py-4 font-black shadow-xl shadow-blue-500/20 rounded-xl hover:scale-[1.02] transition-all uppercase tracking-widest text-sm">
-                                                    <i class="fa-solid fa-check-double mr-2"></i> Accept Assignment
-                                                </button>
-                                            </form>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
@@ -674,71 +804,81 @@ $page_title = 'Driver Dashboard';
 
                 <?php elseif ($activeTab === 'history'): ?>
                     <div class="animate-fade-in">
-                        <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                            <div>
-                                <h1 class="text-3xl font-bold text-gray-900">Work History</h1>
-                                <p class="text-muted">Tracking your professional service journey.</p>
-                            </div>
-                            <div class="px-6 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
-                                <i class="fa-solid fa-clipboard-check text-primary"></i>
+                        <!-- Centered History Header (Matched to Mechanic Dashboard) -->
+                        <div class="text-center mb-20 relative z-20">
+                            <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Work History</h1>
+                            <p class="text-slate-500 font-medium mt-1">Tracking your professional service journey.</p>
+                            
+                            <div class="mt-8 inline-flex px-6 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm items-center gap-3 mx-auto">
+                                <i class="fa-solid fa-clipboard-check text-[#3b82f6]"></i>
                                 <div>
                                     <span class="text-lg font-black text-gray-900"><?php echo count($historyJobs); ?></span>
-                                    <span class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-tighter">Completed Jobs</span>
+                                    <span class="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-wider">Completed Jobs</span>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="card p-0 overflow-hidden shadow-xl border-none">
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left">
-                                    <thead style="background: #F8FAFC; border-bottom: 1px solid var(--border);">
-                                        <tr class="text-xs font-bold uppercase text-muted tracking-wider">
-                                            <th class="p-5">Completed Date</th>
-                                            <th class="p-5">Vehicle & Customer</th>
-                                            <th class="p-5">Service Type</th>
-                                            <th class="p-5">Service Bill</th>
-                                            <th class="p-5 text-right">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="text-sm">
-                                        <?php if (empty($historyJobs)): ?>
-                                            <tr>
-                                                <td colspan="5" class="p-20 text-center text-muted">
-                                                    <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                                                        <i class="fa-solid fa-clock-rotate-left text-5xl text-gray-200"></i>
-                                                    </div>
-                                                    <h3 class="font-bold text-xl text-gray-400">No Mission History</h3>
-                                                    <p class="mt-2 text-xs">Your completed pickups and deliveries will appear here.</p>
-                                                </td>
+                        
+                        <div class="max-w-6xl mx-auto">
+                            <div class="card p-0 overflow-hidden bg-white rounded-xl border border-gray-100 shadow-sm">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-center">
+                                        <thead style="background: #F8FAFC; border-bottom: 1px solid #e2e8f0;">
+                                            <tr class="text-xs font-bold uppercase text-muted tracking-wider">
+                                                <th class="p-5 text-center">Completed Date</th>
+                                                <th class="p-5 text-center">Vehicle & Customer</th>
+                                                <th class="p-5 text-center">Service Type</th>
+                                                <th class="p-5 text-center">Service Bill</th>
+                                                <th class="p-5 text-center">Status</th>
                                             </tr>
-                                        <?php else: ?>
-                                            <?php foreach ($historyJobs as $job): ?>
-                                                <tr class="border-t border-gray-50 hover:bg-blue-50/30 transition-colors group">
-                                                    <td class="p-6 font-bold text-gray-500 text-xs">
-                                                        <?php echo date('M d, Y', strtotime($job['updated_at'])); ?>
-                                                    </td>
-                                                    <td class="p-6">
-                                                        <div class="font-black text-gray-900 group-hover:text-primary transition-colors"><?php echo $job['year'] . ' ' . $job['make'] . ' ' . $job['model']; ?></div>
-                                                        <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5"><?php echo htmlspecialchars($job['customer_name']); ?></div>
-                                                    </td>
-                                                    <td class="p-6">
-                                                        <span class="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider <?php echo $job['type'] == 'pickup' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-green-50 text-green-600 border border-green-100'; ?>">
-                                                            <?php echo $job['type']; ?>
-                                                        </span>
-                                                    </td>
-                                                    <td class="p-6 font-black text-gray-900">₹<?php echo number_format($job['fee'], 2); ?></td>
-                                                    <td class="p-6 text-right">
-                                                        <span class="badge badge-success px-3 py-1 rounded-full text-[10px] font-bold uppercase">
-                                                            Completed
-                                                        </span>
+                                        </thead>
+                                        <tbody class="text-sm">
+                                            <?php if (empty($historyJobs)): ?>
+                                                <tr>
+                                                    <td colspan="5" class="p-16 text-center text-muted">
+                                                        <i class="fa-solid fa-clock-rotate-left text-6xl mb-4 opacity-10"></i>
+                                                        <p>No completed jobs in your history yet.</p>
                                                     </td>
                                                 </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
+                                            <?php else: ?>
+                                                <?php foreach ($historyJobs as $job): 
+                                                    // Vehicle Sanitization Filter
+                                                    $rawParts = [
+                                                        'year'  => trim($job['year'] ?? ''),
+                                                        'make'  => trim($job['make'] ?? ''),
+                                                        'model' => trim($job['model'] ?? ''),
+                                                    ];
+                                                    $cleanParts = [];
+                                                    foreach ($rawParts as $p) {
+                                                        if ($p !== '' && $p !== '0' && strtolower($p) !== 'null' && strtolower($p) !== 'n/a') {
+                                                            $cleanParts[] = $p;
+                                                        }
+                                                    }
+                                                    $vehicleTitle = implode(' ', $cleanParts) ?: 'Vehicle Details';
+                                                ?>
+                                                    <tr class="border-t border-gray-100 hover:bg-gray-50/50 transition-colors">
+                                                        <td class="p-5 font-medium text-gray-500">
+                                                            <?php echo date('M d, Y', strtotime($job['updated_at'])); ?>
+                                                        </td>
+                                                        <td class="p-5">
+                                                            <div class="font-bold text-gray-900"><?php echo htmlspecialchars($vehicleTitle); ?></div>
+                                                            <div class="text-xs text-muted font-medium"><?php echo htmlspecialchars(strtolower($job['customer_name'])); ?></div>
+                                                        </td>
+                                                        <td class="p-5 text-gray-700"><?php echo htmlspecialchars(ucfirst($job['type'])); ?></td>
+                                                        <td class="p-5 font-black text-gray-900">₹<?php echo number_format($job['fee'], 2); ?></td>
+                                                        <td class="p-5">
+                                                            <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold uppercase">
+                                                                Completed
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
+                    </div>
                     </div>
 
                 <?php elseif ($activeTab === 'profile'): ?>
