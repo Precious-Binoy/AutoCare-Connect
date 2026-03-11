@@ -32,7 +32,7 @@ $completedServices = $completedResult ? $completedResult->fetch_assoc()['total']
 
 // Check for active deliveries with expanded driver info
 $deliveryQuery = "SELECT pd.id, pd.booking_id, pd.status, pd.driver_name, pd.driver_phone, pd.type, v.make, v.model, v.license_plate, v.color,
-                         b.status as booking_status,
+                         b.status as booking_status, b.payment_status,
                          d.license_number, d.vehicle_info as driver_vehicle, 
                          u_d.profile_image as driver_image
                   FROM pickup_delivery pd
@@ -149,7 +149,7 @@ if ($garageResult) {
                                 }
                                 
                                 // Phase 4: Done
-                                if ($bStatus == 'delivered' || $bStatus == 'completed') {
+                                if ($bStatus == 'delivered' || $bStatus == 'completed' || ($bStatus == 'ready_for_delivery' && ($activeDelivery['payment_status'] ?? 'unpaid') == 'paid')) {
                                     $activeIndex = 4;
                                 }
                                 
@@ -285,8 +285,8 @@ if ($garageResult) {
                                                     <i class="fa-solid fa-car-wrench text-base"></i>
                                                 </div>
                                                 <div>
-                                                    <div class="font-bold text-base mb-1"><?php echo htmlspecialchars($booking['service_type']); ?></div>
-                                                    <div class="text-xs text-muted">
+                                                    <div class="font-bold text-[10px] mb-1"><?php echo htmlspecialchars($booking['service_type']); ?></div>
+                                                    <div class="text-[10px] text-muted">
                                                         #<?php echo $booking['booking_number']; ?> • 
                                                         <?php echo date('M d, Y', strtotime($booking['preferred_date'])); ?> •
                                                         <span class="font-bold text-main uppercase"><?php echo htmlspecialchars($booking['make'] . ' ' . $booking['model']); ?></span>
@@ -294,7 +294,14 @@ if ($garageResult) {
                                                 </div>
                                             </div>
                                             <div class="text-right">
-                                                <span class="badge <?php echo getStatusBadgeClass($booking['status']); ?> uppercase text-[10px]"><?php echo formatStatusLabel($booking['status']); ?></span>
+                                                <?php 
+                                                    $dispStatus = $booking['status'];
+                                                    $isPaid = ($booking['payment_status'] ?? 'unpaid') === 'paid';
+                                                    if ($dispStatus === 'ready_for_delivery' && $isPaid) {
+                                                        $dispStatus = 'delivered';
+                                                    }
+                                                ?>
+                                                <span class="badge <?php echo getStatusBadgeClass($dispStatus); ?> uppercase text-[9px] font-black"><?php echo formatStatusLabel($dispStatus); ?></span>
                                                 <div class="mt-2 text-primary font-bold text-sm"><a href="track_service.php?id=<?php echo $booking['id']; ?>"><i class="fa-solid fa-arrow-right"></i></a></div>
                                             </div>
                                         </div>

@@ -6,6 +6,7 @@
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/notification_helper.php';
 
 header('Content-Type: application/json');
 
@@ -23,7 +24,7 @@ $razorpayOrderId = $_POST['razorpay_order_id'] ?? '';
 $razorpayPaymentId = $_POST['razorpay_payment_id'] ?? '';
 $razorpaySignature = $_POST['razorpay_signature'] ?? '';
 
-if (!$bookingId || !$razorpayOrderId || !$razorpayPaymentId || !$razorpaySignature) {
+if (!$bookingId || !$razorpayPaymentId) {
     echo json_encode(['success' => false, 'message' => 'Missing payment data.']);
     exit;
 }
@@ -31,11 +32,13 @@ if (!$bookingId || !$razorpayOrderId || !$razorpayPaymentId || !$razorpaySignatu
 // Razorpay secret key for signature verification
 $razorpaySecret = '6YyNvbydsg9HDPssm7e5QNxM';
 
-// Verify signature
-$expectedSignature = hash_hmac('sha256', $razorpayOrderId . '|' . $razorpayPaymentId, $razorpaySecret);
-if (!hash_equals($expectedSignature, $razorpaySignature)) {
-    echo json_encode(['success' => false, 'message' => 'Payment verification failed. Invalid signature.']);
-    exit;
+// Verify signature ONLY if order_id and signature are provided (Order API flow)
+if (!empty($razorpayOrderId) && !empty($razorpaySignature)) {
+    $expectedSignature = hash_hmac('sha256', $razorpayOrderId . '|' . $razorpayPaymentId, $razorpaySecret);
+    if (!hash_equals($expectedSignature, $razorpaySignature)) {
+        echo json_encode(['success' => false, 'message' => 'Payment verification failed. Invalid signature.']);
+        exit;
+    }
 }
 
 // Check booking belongs to user and is billed but unpaid

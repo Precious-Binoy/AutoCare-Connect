@@ -103,12 +103,12 @@ $pendingBookingsResult = executeQuery($pendingBookingsQuery, [], '');
 $pendingBookings = $pendingBookingsResult ? $pendingBookingsResult->fetch_assoc()['count'] : 0;
 
 // In progress bookings
-$inProgressQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('in_progress', 'ready_for_delivery')";
+$inProgressQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('confirmed', 'in_progress')";
 $inProgressResult = executeQuery($inProgressQuery, [], '');
 $inProgressBookings = $inProgressResult ? $inProgressResult->fetch_assoc()['count'] : 0;
 
 // Completed today
-$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('completed', 'delivered') AND DATE(completion_date) = CURDATE()";
+$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('completed', 'delivered', 'ready_for_delivery') AND DATE(completion_date) = CURDATE()";
 $completedTodayResult = executeQuery($completedTodayQuery, [], '');
 $completedToday = $completedTodayResult ? $completedTodayResult->fetch_assoc()['count'] : 0;
 
@@ -128,12 +128,12 @@ $totalCustomersResult = executeQuery($totalCustomersQuery, [], '');
 $totalCustomers = $totalCustomersResult ? $totalCustomersResult->fetch_assoc()['count'] : 0;
 
 // Today's revenue
-$todayRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE status IN ('completed', 'delivered') AND DATE(completion_date) = CURDATE()";
+$todayRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE status IN ('completed', 'delivered', 'ready_for_delivery') AND DATE(completion_date) = CURDATE()";
 $todayRevenueResult = executeQuery($todayRevenueQuery, [], '');
 $todayRevenue = $todayRevenueResult ? ($todayRevenueResult->fetch_assoc()['revenue'] ?? 0) : 0;
 
 // Total Revenue (All Time)
-$totalRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE status IN ('completed', 'delivered')";
+$totalRevenueQuery = "SELECT SUM(final_cost) as revenue FROM bookings WHERE status IN ('completed', 'delivered', 'ready_for_delivery')";
 $totalRevenueResult = executeQuery($totalRevenueQuery, [], '');
 $totalRevenue = $totalRevenueResult ? ($totalRevenueResult->fetch_assoc()['revenue'] ?? 0) : 0;
 
@@ -470,7 +470,7 @@ if ($availableWorkersRes) {
                                              JOIN users u ON b.user_id = u.id
                                              LEFT JOIN mechanics m ON b.mechanic_id = m.id
                                              LEFT JOIN users mu ON m.user_id = mu.id
-                                             WHERE b.status IN ('confirmed', 'in_progress', 'ready_for_delivery')
+                                             WHERE b.status IN ('confirmed', 'in_progress')
                                              ORDER BY b.updated_at DESC
                                              LIMIT 5";
                     $runningServicesResult = executeQuery($runningServicesQuery, [], '');
@@ -491,55 +491,55 @@ if ($availableWorkersRes) {
                         <?php else: ?>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left">
-                                    <thead class="bg-gray-50 text-xs font-black uppercase text-muted tracking-widest border-b border-gray-100">
+                                    <thead class="bg-gray-50 border-b border-gray-100">
                                         <tr>
-                                            <th class="p-4">Booking</th>
-                                            <th class="p-4">Vehicle</th>
-                                            <th class="p-4">Service</th>
-                                            <th class="p-4">Mechanic</th>
-                                            <th class="p-4">Progress</th>
-                                            <th class="p-4 text-right">Status</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Booking</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Vehicle</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Service</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Mechanic</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Progress</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest text-right">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody class="text-sm">
                                         <?php foreach ($runningServices as $service): ?>
                                             <tr class="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                                <td class="p-4">
+                                                <td class="p-3">
                                                     <div class="font-mono text-primary font-bold text-xs">#<?php echo htmlspecialchars($service['booking_number']); ?></div>
-                                                    <div class="text-xs text-muted"><?php echo htmlspecialchars($service['customer_name']); ?></div>
+                                                    <div class="text-[10px] text-muted font-medium"><?php echo htmlspecialchars($service['customer_name']); ?></div>
                                                 </td>
-                                                <td class="p-4">
-                                                    <div class="font-bold text-gray-900 text-sm"><?php echo htmlspecialchars($service['year'] . ' ' . $service['make'] . ' ' . $service['model']); ?></div>
-                                                    <div class="text-xs text-muted font-mono tracking-tighter"><?php echo htmlspecialchars($service['license_plate']); ?></div>
+                                                <td class="p-3">
+                                                    <div class="font-bold text-gray-900 text-[11px] leading-tight"><?php echo htmlspecialchars($service['year'] . ' ' . $service['make'] . ' ' . $service['model']); ?></div>
+                                                    <div class="text-[9px] text-primary font-black tracking-widest mt-0.5"><?php echo htmlspecialchars($service['license_plate']); ?></div>
                                                 </td>
-                                                <td class="p-4">
-                                                    <div class="text-gray-700"><?php echo htmlspecialchars($service['service_type']); ?></div>
+                                                <td class="p-3">
+                                                    <div class="text-gray-700 text-[11px] font-medium leading-none"><?php echo htmlspecialchars($service['service_type']); ?></div>
                                                     <?php if ($service['has_pickup_delivery']): ?>
-                                                        <span class="text-[9px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">Pickup/Delivery</span>
+                                                        <span class="text-[8px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase font-black tracking-tighter mt-1 inline-block border border-blue-100">Logistics</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td class="p-4">
+                                                <td class="p-3">
                                                     <?php if ($service['mechanic_name']): ?>
-                                                        <div class="flex items-center gap-2">
-                                                            <div class="w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[10px] font-bold">
+                                                        <div class="flex items-center gap-1.5">
+                                                            <div class="w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[9px] font-black border border-primary/5">
                                                                 <?php echo strtoupper(substr($service['mechanic_name'], 0, 1)); ?>
                                                             </div>
-                                                            <span class="font-medium"><?php echo htmlspecialchars($service['mechanic_name']); ?></span>
+                                                            <span class="text-[10px] font-black text-gray-700"><?php echo htmlspecialchars($service['mechanic_name']); ?></span>
                                                         </div>
                                                     <?php else: ?>
-                                                        <span class="text-muted text-xs">Not assigned</span>
+                                                        <span class="text-muted text-[10px] italic">Not assigned</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td class="p-4">
+                                                <td class="p-3">
                                                     <div class="flex items-center gap-2">
-                                                        <div class="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                                                            <div class="bg-primary h-full transition-all" style="width: <?php echo $service['progress_percentage'] ?? 0; ?>%"></div>
+                                                        <div class="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden min-w-[60px]">
+                                                            <div class="bg-primary h-full transition-all duration-700" style="width: <?php echo $service['progress_percentage'] ?? 0; ?>%"></div>
                                                         </div>
-                                                        <span class="text-xs font-bold text-gray-600"><?php echo $service['progress_percentage'] ?? 0; ?>%</span>
+                                                        <span class="text-[10px] font-black text-gray-500"><?php echo $service['progress_percentage'] ?? 0; ?>%</span>
                                                     </div>
                                                 </td>
-                                                <td class="p-4 text-right">
-                                                    <span class="badge <?php echo getStatusBadgeClass($service['status']); ?> text-[10px] px-3 py-1 rounded-full font-bold uppercase">
+                                                <td class="p-3 text-right">
+                                                    <span class="badge <?php echo getStatusBadgeClass($service['status']); ?> text-[9px] font-black uppercase px-2 py-0.5 rounded-md">
                                                         <?php echo formatStatusLabel($service['status']); ?>
                                                     </span>
                                                 </td>
@@ -657,8 +657,8 @@ if ($availableWorkersRes) {
                                     </div>
 
                                     <div class="input-group-modern">
-                                        <label class="input-label-modern">Date of Birth</label>
-                                        <input type="date" name="dob" class="input-modern" value="<?php echo htmlspecialchars($admin['dob'] ?? ''); ?>">
+                                        <label class="input-label-modern" for="admin_dob">Date of Birth</label>
+                                        <input type="date" name="dob" id="admin_dob" class="input-modern" value="<?php echo htmlspecialchars($admin['dob'] ?? ''); ?>" max="<?php echo date('Y-m-d', strtotime('-18 years')); ?>">
                                     </div>
 
                                     <div class="input-group-modern">

@@ -47,8 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if (empty($message)) {
-        echo json_encode(['success' => false, 'error' => 'Message cannot be empty']);
+    if (empty($message) || !isPlausibleText($message, 3)) {
+        echo json_encode(['success' => false, 'error' => 'Message must be at least 3 characters long and contain at least one letter.']);
+        exit;
+    }
+
+    if (!isPlausibleText($subject, 2)) {
+        echo json_encode(['success' => false, 'error' => 'Subject must be at least 2 characters long and contain at least one letter.']);
         exit;
     }
 
@@ -66,8 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             
             // 2. Insert into notifications table
-            $notifTitle = "New Message from " . $_SESSION['user_name'];
-            $notifQuery = "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'message')";
+            $notifTitle = "💬 New Message from " . ($_SESSION['user_name'] ?? 'Someone');
+            $notifQuery = "INSERT INTO notifications (user_id, title, message, type, link_url) VALUES (?, ?, ?, 'message', 'messages.php')";
             $stmt = $conn->prepare($notifQuery);
             $stmt->bind_param("iss", $recipient_id, $notifTitle, $message);
             $stmt->execute();

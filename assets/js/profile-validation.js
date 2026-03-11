@@ -1,20 +1,19 @@
-<script>
 // Real-time validation for profile form
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('form[method="POST"]');
     if (!form) return;
-    
+
     // Phone validation
     const phoneInput = document.querySelector('input[name="phone"]');
     if (phoneInput) {
-        phoneInput.addEventListener('input', function() {
+        phoneInput.addEventListener('input', function () {
             const value = this.value.trim();
             const errorDiv = this.nextElementSibling;
-            
+
             if (errorDiv && errorDiv.classList.contains('error-message')) {
                 errorDiv.remove();
             }
-            
+
             if (value === '') {
                 showError(this, 'Phone number is required');
             } else if (!/^\d{10}$/.test(value)) {
@@ -24,23 +23,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Date of Birth validation
-    const dobInput = document.querySelector('input[name="dob"]');
+    const dobInput = document.getElementById('mechanic_dob');
     if (dobInput) {
-        dobInput.addEventListener('change', function() {
+        dobInput.addEventListener('change', function () {
             const value = this.value;
             const errorDiv = this.nextElementSibling;
-            
+
             if (errorDiv && errorDiv.classList.contains('error-message')) {
                 errorDiv.remove();
             }
-            
+
             if (value) {
                 const dob = new Date(value);
                 const today = new Date();
                 const age = today.getFullYear() - dob.getFullYear();
-                
+
                 if (dob > today) {
                     showError(this, 'Date of birth cannot be in the future');
                 } else if (age < 18) {
@@ -53,11 +52,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Form submission validation
-    form.addEventListener('submit', function(e) {
+    form.addEventListener('submit', function (e) {
         let isValid = true;
-        
+
         // Validate phone
         if (phoneInput) {
             const phoneValue = phoneInput.value.trim();
@@ -66,7 +65,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 isValid = false;
             }
         }
-        
+
+        // Validate DOB
+        if (dobInput) {
+            const dobValue = dobInput.value;
+            if (dobValue) {
+                const dob = new Date(dobValue);
+                const today = new Date();
+                const age = today.getFullYear() - dob.getFullYear();
+                if (dob > today || age < 18) {
+                    showError(dobInput, 'Invalid date of birth or age under 18');
+                    isValid = false;
+                }
+            }
+        }
+
         if (!isValid) {
             e.preventDefault();
         }
@@ -89,9 +102,3 @@ function clearError(input) {
         errorDiv.remove();
     }
 }
-</script>
-<style>
-.leave-table-row {
-    margin-bottom: 0.25rem;
-}
-</style>

@@ -2,6 +2,7 @@
 require_once 'config/config.php';
 require_once 'config/db.php';
 require_once 'includes/functions.php';
+require_once 'includes/notification_helper.php';
 
 // Ensure database connection is initialized
 $conn = getDbConnection();
@@ -110,6 +111,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         if ($stmt->execute()) {
                             $success_msg = 'Your application has been submitted successfully! We will review your details and documents. You will receive an email once the admin approves your request. After that, you can login using your email and password to access your dashboard.';
+                            // Notify all admins about new job application
+                            $roleLabel = ucfirst($role);
+                            notifyAdmins(
+                                "📝 New Job Application",
+                                "{$name} has applied for the {$roleLabel} position. Review their documents and approve or reject.",
+                                'job_request',
+                                'admin_job_requests.php'
+                            );
                         } else {
                             $error_msg = 'Failed to submit application. Please try again.';
                         }

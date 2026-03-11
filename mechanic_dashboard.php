@@ -2,6 +2,7 @@
 require_once 'includes/auth.php';
 require_once 'config/db.php';
 require_once 'includes/functions.php';
+require_once 'includes/notification_helper.php';
 
 // Require mechanic role
 if ($_SESSION['user_role'] !== 'mechanic') {
@@ -36,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     $dob = sanitizeInput($_POST['dob'] ?? '');
     $address = sanitizeInput($_POST['address'] ?? '');
     $specialization = sanitizeInput($_POST['specialization'] ?? '');
-    $experience = sanitizeInput($_POST['years_experience'] ?? '0');
+    $experience = $_POST['years_experience'] ?? $mechanic['years_experience'] ?? '0';
 
     // Handle Image Upload
     $profile_image_path = $mechanic['profile_image'] ?? null;
@@ -80,6 +81,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     if (empty($error_msg)) {
         $conn->begin_transaction();
         try {
+            // DOB Validation (18 years)
+            if (!empty($dob)) {
+                $dobDate = new DateTime($dob);
+                $today = new DateTime();
+                $age = $today->diff($dobDate)->y;
+                
+                if ($dobDate > $today) {
+                    throw new Exception("Date of birth cannot be in the future.");
+                } elseif ($age < 18) {
+                    throw new Exception("You must be at least 18 years old.");
+                }
+            }
             // Update users table
             $updateUserQuery = "UPDATE users SET name = ?, phone = ?, profile_image = ?, dob = ?, address = ? WHERE id = ?";
             executeQuery($updateUserQuery, [$name, $phone, $profile_image_path, $dob, $address, $user_id], 'sssssi');
@@ -162,16 +175,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 
             // Notify Admin & Customer (if pickup/delivery exists)
             if ($hasPickupDelivery) {
-                $notifTitle = 'Serice Completed';
+                $notifTitle = 'Service Completed - Ready for Delivery';
                 $notifMsg = "Mechanic has completed service for Booking #$booking_id. Ready for delivery.";
-                notifyAdmins($notifTitle, $notifMsg, 'service');
+                notifyAdmins($notifTitle, $notifMsg, 'service', 'admin_bookings.php');
+                // Also notify customer
+                $custQuery = "SELECT user_id, booking_number FROM bookings WHERE id = ?";
+                $custRes = executeQuery($custQuery, [$booking_id], 'i');
+                if ($cust = $custRes->fetch_assoc()) {
+                    notifyCustomer($cust['user_id'], '🎉 Service Complete - Delivery Coming!', "Your vehicle service is complete! A driver will be assigned shortly to return your vehicle.", 'service', 'track_service.php');
+                }
             } else {
                  // Notify Customer directly if no delivery
                  $custQuery = "SELECT user_id FROM bookings WHERE id = ?";
                  $custRes = executeQuery($custQuery, [$booking_id], 'i');
                  if ($cust = $custRes->fetch_assoc()) {
-                     $notifMsg = "Your vehicle service is complete and ready for pickup!";
-                     notifyCustomer($cust['user_id'], 'Service Completed', $notifMsg, 'service');
+                     $notifMsg = "Your vehicle service is complete and ready for pickup! Please visit our service center.";
+                     notifyCustomer($cust['user_id'], '🎉 Service Completed!', $notifMsg, 'service', 'track_service.php');
                  }
             }
 
@@ -190,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
             $custQ = "SELECT user_id FROM bookings WHERE id = ?";
             $custR = executeQuery($custQ, [$booking_id], 'i');
             if ($cust = $custR->fetch_assoc()) {
-                notifyCustomer($cust['user_id'], '⚙️ Work Started', 'Your mechanic has started working on your vehicle.', 'service');
+                notifyCustomer($cust['user_id'], '⚙️ Work Started', 'Your mechanic has started working on your vehicle. Track the progress in real-time.', 'service', 'track_service.php');
             }
         }
         
@@ -235,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_job'])) {
                 $custQ = "SELECT user_id FROM bookings WHERE id = ?";
                 $custR = executeQuery($custQ, [$booking_id], 'i');
                 if ($cust = $custR->fetch_assoc()) {
-                    notifyCustomer($cust['user_id'], '🔧 Mechanic Assigned', 'A mechanic has been assigned to your vehicle and will begin work shortly.', 'service');
+                    notifyCustomer($cust['user_id'], '🔧 Mechanic Assigned', 'A mechanic has been assigned to your vehicle and will begin work shortly.', 'service', 'track_service.php');
                 }
             } else {
                 $conn->rollback();
@@ -841,9 +860,20 @@ $page_title = 'Mechanic Dashboard';
                             <form method="POST" enctype="multipart/form-data">
                                 <div class="profile-avatar-container">
                                     <?php 
-                                        $displayImage = !empty($mechanic['profile_image']) ? $mechanic['profile_image'] : 'assets/img/default-avatar.png';
+                                        $displayImage = $mechanic['profile_image'];
+                                        $fallbackAvatar = 'https://ui-avatars.com/api/?name=' . urlencode($mechanic['name'] ?? 'User') . '&background=2563eb&color=fff&size=200';
+                                        
+                                        // Resolve path
+                                        if (!empty($displayImage) && strpos($displayImage, 'http') !== 0) {
+                                            $baseUrl = defined('APP_URL') ? APP_URL : '';
+                                            $displayImage = rtrim($baseUrl, '/') . '/' . ltrim($displayImage, '/');
+                                        } else if (empty($displayImage)) {
+                                            $displayImage = $fallbackAvatar;
+                                        }
                                     ?>
-                                    <img src="<?php echo htmlspecialchars($displayImage); ?>" alt="Profile" class="profile-avatar" id="avatarPreview">
+                                    <img src="<?php echo htmlspecialchars($displayImage); ?>" 
+                                         alt="Profile" class="profile-avatar" id="avatarPreview"
+                                         onerror="this.src='<?php echo $fallbackAvatar; ?>'; this.onerror=null;">
                                     <label for="profile_upload" class="edit-avatar-btn" title="Change Photo">
                                         <i class="fa-solid fa-pencil"></i>
                                     </label>
@@ -873,8 +903,8 @@ $page_title = 'Mechanic Dashboard';
                                     </div>
 
                                     <div class="input-group-modern">
-                                        <label class="input-label-modern">Date of Birth</label>
-                                        <input type="date" name="dob" class="input-modern" value="<?php echo htmlspecialchars($mechanic['dob'] ?? ''); ?>">
+                                        <label class="input-label-modern" for="mechanic_dob">Date of Birth</label>
+                                        <input type="date" name="dob" id="mechanic_dob" class="input-modern" value="<?php echo htmlspecialchars($mechanic['dob'] ?? ''); ?>" max="<?php echo date('Y-m-d', strtotime('-18 years')); ?>">
                                     </div>
 
                                     <div class="input-group-modern">

@@ -14,6 +14,19 @@ function sanitizeInput($data) {
 }
 
 /**
+ * Check if text has at least one letter and meets minimum length
+ * @param string $text
+ * @param int $minLength
+ * @return bool
+ */
+function isPlausibleText($text, $minLength = 1) {
+    $trimmed = trim($text);
+    if (strlen($trimmed) < $minLength) return false;
+    // Must contain at least one alphabetic character
+    return preg_match('/[a-zA-Z]/', $trimmed);
+}
+
+/**
  * Validate email address
  * @param string $email
  * @return bool

@@ -2,6 +2,7 @@
 require_once '../includes/auth.php';
 require_once '../config/db.php';
 require_once '../includes/functions.php';
+require_once '../includes/notification_helper.php';
 
 header('Content-Type: application/json');
 
@@ -100,8 +101,14 @@ if ($method === 'POST') {
                     ? "Your {$leaveRow['leave_type']} leave request has been approved by the admin."
                     : "Your {$leaveRow['leave_type']} leave request has been rejected. " . ($adminComment ? "Reason: $adminComment" : '');
                 
-                // Notify User
-                notifyUser($leaveRow['user_id'], $notifTitle, $notifMessage, 'leave');
+                // Determine the user's role to link to correct dashboard
+                $roleQuery = "SELECT role FROM users WHERE id = ?";
+                $roleRes = executeQuery($roleQuery, [$leaveRow['user_id']], 'i');
+                $userRole = $roleRes ? ($roleRes->fetch_assoc()['role'] ?? 'mechanic') : 'mechanic';
+                $dashLink = ($userRole === 'driver') ? 'driver_dashboard.php?tab=leave' : 'mechanic_dashboard.php?tab=leave';
+                
+                // Notify User with link to leave tab
+                notifyUser($leaveRow['user_id'], $notifTitle, $notifMessage, 'leave', $dashLink);
             }
             
             echo json_encode(['success' => true, 'message' => 'Leave request updated successfully']);

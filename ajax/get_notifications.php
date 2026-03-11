@@ -13,11 +13,11 @@ $conn = getDbConnection();
 $user_id = $_SESSION['user_id'];
 
 // Fetch notifications for the user
-$query = "SELECT id, title, message, is_read, created_at 
+$query = "SELECT id, title, message, type, link_url, is_read, created_at 
           FROM notifications 
           WHERE user_id = ? 
           ORDER BY created_at DESC 
-          LIMIT 20";
+          LIMIT 25";
 
 $stmt = $conn->prepare($query);
 $stmt->bind_param("i", $user_id);
@@ -26,6 +26,7 @@ $result = $stmt->get_result();
 
 $notifications = [];
 $unread_count = 0;
+$latest_id = 0;
 
 while ($row = $result->fetch_assoc()) {
     // Calculate time ago
@@ -52,11 +53,16 @@ while ($row = $result->fetch_assoc()) {
     if ($row['is_read'] == 0) {
         $unread_count++;
     }
+    
+    if ($row['id'] > $latest_id) {
+        $latest_id = $row['id'];
+    }
 }
 
 echo json_encode([
     'success' => true,
     'notifications' => $notifications,
-    'unread_count' => $unread_count
+    'unread_count' => $unread_count,
+    'latest_id' => $latest_id
 ]);
 ?>

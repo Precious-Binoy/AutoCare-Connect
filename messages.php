@@ -177,8 +177,50 @@ elseif ($activeTab === 'sent') {
         }
 
         .message-row.unread {
-            background-color: #eff6ff;
-            font-weight: 600;
+            background-color: #f0f7ff;
+            border-left: 4px solid var(--primary);
+        }
+
+        .message-row.unread .msg-subject {
+            font-weight: 800;
+        }
+
+        .message-row.unread .sender-name {
+            font-weight: 700;
+        }
+
+        .unread-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        .announcement-badge {
+            background-color: #fef3c7;
+            color: #92400e;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            margin-left: 8px;
+            border: 1px solid #fde68a;
+        }
+
+        .section-divider {
+            padding: 24px 24px 12px;
+            background: #f9fafb;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #f3f4f6;
         }
 
         .message-row:last-child {
@@ -382,128 +424,42 @@ elseif ($activeTab === 'sent') {
                     </button>
                 </div>
 
-                <!-- Messages List -->
+                                <!-- Messages List -->
                 <?php if (empty($messages)): ?>
                     <div class="empty-state">
                         <i class="fa-regular fa-clipboard text-4xl mb-4 opacity-50"></i>
-                        <p class="text-lg font-medium">No <?php echo ($activeTab === 'inbox') ? 'new announcements' : 'messages sent'; ?></p>
+                        <p class="text-lg font-medium">No <?php echo ($activeTab === "inbox") ? "new announcements" : "messages sent"; ?></p>
                     </div>
                 <?php else: ?>
                     <div class="message-list">
-                        <?php foreach ($messages as $msg): 
-                            // Determine display values based on context
-                            if ($activeTab === 'sent') {
-                                // Grouped Sent View for ALL users
-                                // Identify realistic names/images from group
-                                $allNames = explode(',', $msg['recipient_names'] ?? '');
-                                $allImages = explode(',', $msg['recipient_images'] ?? '');
-                                
-                                $bestName = $allNames[0] ?? 'Unknown';
-                                $bestImage = !empty($allImages[0]) ? $allImages[0] : '';
-
-                                if ($msg['recipient_count'] > 1) {
-                                    $roles = explode(',', $msg['recipient_roles']);
-                                    $uniqueRoles = array_unique($roles);
-                                    
-                                    // Check if it's sent to Admins
-                                    $isToAdmins = false;
-                                    foreach ($uniqueRoles as $r) {
-                                        if (strtolower(trim($r)) === 'admin') {
-                                            $isToAdmins = true;
-                                        } else {
-                                            $isToAdmins = false;
-                                            break; 
-                                        }
-                                    }
-
-                                    if ($isToAdmins) {
-                                        $displayParams = [
-                                            'name' => $bestName,
-                                            'role' => 'Admin',
-                                            'avatar' => !empty($bestImage) ? $bestImage : strtoupper(substr($bestName, 0, 1)),
-                                            'is_image' => !empty($bestImage),
-                                            'subject' => $msg['subject'],
-                                            'body' => $msg['message'],
-                                            'date' => $msg['created_at'],
-                                            'unread' => false
-                                        ];
-                                    } else {
-                                        $displayParams = [
-                                            'name' => 'Broadcast',
-                                            'role' => $msg['recipient_count'] . ' recipients',
-                                            'avatar' => 'B',
-                                            'is_image' => false,
-                                            'subject' => $msg['subject'],
-                                            'body' => $msg['message'],
-                                            'date' => $msg['created_at'],
-                                            'unread' => false
-                                        ];
-                                    }
-                                } else {
-                                    // Single Recipient
-                                    $displayParams = [
-                                        'name' => $bestName,
-                                        'role' => $msg['single_receiver_role'] ?? 'User',
-                                        'avatar' => !empty($bestImage) ? $bestImage : strtoupper(substr($bestName, 0, 1)),
-                                        'is_image' => !empty($bestImage),
-                                        'subject' => $msg['subject'],
-                                        'body' => $msg['message'],
-                                        'date' => $msg['created_at'],
-                                        'unread' => false
-                                    ];
-                                }
+                        <?php 
+                        $newMessages = [];
+                        $earlierMessages = [];
+                        
+                        foreach ($messages as $msg) {
+                            if ($activeTab === "inbox" && !($msg["is_read"] ?? 1)) {
+                                $newMessages[] = $msg;
                             } else {
-                                // Inbox Logic (Standard)
-                                $name = $msg['sender_name'] ?? 'System';
-                                $role = $msg['sender_role'] ?? 'System';
-                                $profileInfo = $msg['profile_image'] ?? '';
-                                
-                                $displayParams = [
-                                    'name' => $name,
-                                    'role' => $role,
-                                    'avatar' => !empty($profileInfo) ? $profileInfo : strtoupper(substr($name, 0, 1)),
-                                    'is_image' => !empty($profileInfo),
-                                    'subject' => $msg['subject'],
-                                    'body' => $msg['message'],
-                                    'date' => $msg['created_at'],
-                                    'unread' => !($msg['is_read'] ?? 1)
-                                ];
+                                $earlierMessages[] = $msg;
                             }
-                        ?>
-                            <!-- Compact Unified Message Row -->
-                            <div class="message-row <?php echo $displayParams['unread'] ? 'unread' : ''; ?>" 
-                                 onclick='viewMessage(<?php echo json_encode($displayParams); ?>)'>
-                                
-                                <div class="col-sender">
-                                    <div class="sender-avatar-small" <?php echo $displayParams['is_image'] ? 'style="background:none;"' : ''; ?>>
-                                        <?php if ($displayParams['is_image']): ?>
-                                            <img src="<?php echo htmlspecialchars($displayParams['avatar']); ?>" alt="" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.innerText='<?php echo htmlspecialchars(substr($displayParams['name'], 0, 1)); ?>';">
-                                        <?php else: ?>
-                                            <?php echo $displayParams['avatar']; ?>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="sender-info-text">
-                                        <div class="sender-name"><?php echo htmlspecialchars($displayParams['name']); ?></div>
-                                        <div class="sender-role-badge">
-                                            <?php echo ($activeTab === 'inbox') ? 'From: ' : 'To: '; ?>
-                                            <?php echo htmlspecialchars(ucfirst($displayParams['role'])); ?>
-                                        </div>
-                                    </div>
-                                </div>
+                        }
 
-                                <div class="col-content">
-                                    <div class="msg-subject"><?php echo htmlspecialchars($displayParams['subject']); ?></div>
-                                    <div class="msg-preview">
-                                        <?php echo htmlspecialchars(substr(str_replace(["\r", "\n"], ' ', $displayParams['body']), 0, 120)) . '...'; ?>
-                                    </div>
-                                </div>
+                        if (!empty($newMessages) && $activeTab === "inbox"): ?>
+                            <div class="section-divider">New Messages</div>
+                            <?php foreach ($newMessages as $msg): 
+                                include "includes/message_row.php";
+                            endforeach; ?>
+                        <?php endif; ?>
 
-                                <div class="col-date">
-                                    <?php echo date('M d, h:i A', strtotime($displayParams['date'])); ?>
-                                </div>
-                            </div>
-
-                        <?php endforeach; ?>
+                        <?php 
+                        if (!empty($earlierMessages)): ?>
+                            <?php if (!empty($newMessages) && $activeTab === "inbox"): ?>
+                                <div class="section-divider">Earlier</div>
+                            <?php endif; ?>
+                            <?php foreach ($earlierMessages as $msg): 
+                                include "includes/message_row.php";
+                            endforeach; ?>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 
@@ -539,7 +495,7 @@ elseif ($activeTab === 'sent') {
     <div id="composeModal" class="modal-overlay">
         <!-- Reusing same content structure but wrapping in a div for scrolling -->
         <div class="modal-content" style="padding: 30px; overflow: visible;">
-            <button onclick="closeComposeModal()" class="close-modal" style="top: 20px; right: 20px;">&times;</button>
+            <button onclick="closeComposeModal()" class="close-modal-btn" style="position: absolute; top: 20px; right: 20px;">&times;</button>
             <h2 class="text-2xl font-bold mb-6 text-gray-800">
                 <?php echo ($user_role === 'admin') ? 'New Announcement' : 'Send Message to Admin'; ?>
             </h2>
@@ -575,17 +531,19 @@ elseif ($activeTab === 'sent') {
 
                 <div class="mb-4">
                     <label class="block text-sm font-bold text-gray-700 mb-2">Subject:</label>
-                    <input type="text" name="subject" class="form-control" required placeholder="<?php echo ($user_role === 'admin') ? 'Announcement Title...' : 'Message Subject...'; ?>">
+                    <input type="text" name="subject" id="subjectInput" class="form-control" required placeholder="<?php echo ($user_role === 'admin') ? 'Announcement Title...' : 'Message Subject...'; ?>">
+                    <p id="subjectErrorMsg" class="hidden text-xs text-red-600 mt-1"></p>
                 </div>
 
                 <div class="mb-6">
                     <label class="block text-sm font-bold text-gray-700 mb-2">Message:</label>
                     <textarea name="message" id="messageBody" rows="6" class="form-control" required placeholder="<?php echo ($user_role === 'admin') ? 'Write your announcement here...' : 'Type your message to the administrator...'; ?>"></textarea>
+                    <p id="messageErrorMsg" class="hidden text-xs text-red-600 mt-1"></p>
                 </div>
 
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="closeComposeModal()" class="btn btn-outline">Cancel</button>
-                    <button type="submit" class="btn btn-primary px-6">
+                    <button type="submit" id="sendMessageBtn" class="btn btn-primary px-6">
                         <?php echo ($user_role === 'admin') ? 'Post Announcement' : 'Send Message'; ?>
                     </button>
                 </div>
@@ -599,6 +557,64 @@ elseif ($activeTab === 'sent') {
             const modal = document.getElementById('composeModal');
             modal.style.display = 'flex';
             setTimeout(() => modal.classList.add('active'), 10);
+            
+            // Setup real-time validation once modal is open
+            setupRealtimeValidation();
+        }
+
+        function setupRealtimeValidation() {
+            const subjectInput = document.getElementById('subjectInput');
+            const messageInput = document.getElementById('messageBody');
+            const submitBtn = document.getElementById('sendMessageBtn');
+            const subjectError = document.getElementById('subjectErrorMsg');
+            const messageError = document.getElementById('messageErrorMsg');
+
+            function validate(text, minLength) {
+                const trimmed = text.trim();
+                if (trimmed.length === 0) return { valid: false, msg: "" }; // Don't show error for empty unless submitted
+                if (trimmed.length < minLength) return { valid: false, msg: `Must be at least ${minLength} characters.` };
+                if (!/[a-zA-Z]/.test(trimmed)) return { valid: false, msg: "Must contain at least one letter." };
+                return { valid: true };
+            }
+
+            function performValidation() {
+                const subRes = validate(subjectInput.value, 2);
+                const msgRes = validate(messageInput.value, 3);
+
+                // Update UI for subject
+                if (subjectInput.value.trim() !== '' && !subRes.valid) {
+                    subjectError.textContent = subRes.msg;
+                    subjectError.classList.remove('hidden');
+                    subjectInput.style.borderColor = '#ef4444';
+                } else {
+                    subjectError.classList.add('hidden');
+                    subjectInput.style.borderColor = '';
+                }
+
+                // Update UI for message
+                if (messageInput.value.trim() !== '' && !msgRes.valid) {
+                    messageError.textContent = msgRes.msg;
+                    messageError.classList.remove('hidden');
+                    messageInput.style.borderColor = '#ef4444';
+                } else {
+                    messageError.classList.add('hidden');
+                    messageInput.style.borderColor = '';
+                }
+
+                // Disable button if invalid
+                const isSubjectPlausible = subjectInput.value.trim().length >= 2 && /[a-zA-Z]/.test(subjectInput.value);
+                const isMessagePlausible = messageInput.value.trim().length >= 3 && /[a-zA-Z]/.test(messageInput.value);
+                
+                submitBtn.disabled = !isSubjectPlausible || !isMessagePlausible;
+                submitBtn.style.opacity = submitBtn.disabled ? '0.5' : '1';
+                submitBtn.style.cursor = submitBtn.disabled ? 'not-allowed' : 'pointer';
+            }
+
+            subjectInput.addEventListener('input', performValidation);
+            messageInput.addEventListener('input', performValidation);
+            
+            // Basic check on open
+            performValidation();
         }
 
         function closeComposeModal() {
@@ -624,6 +640,31 @@ elseif ($activeTab === 'sent') {
 
             modal.style.display = 'flex';
             setTimeout(() => modal.classList.add('active'), 10);
+
+            // Mark as read if unread
+            if (msg.unread && msg.id) {
+                const formData = new URLSearchParams();
+                formData.append('id', msg.id);
+                
+                fetch('ajax/mark_message_read.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData.toString()
+                })
+                .then(res => res.json())
+                .then(res => {
+                    if (res.success) {
+                        // Dynamically update the UI
+                        const row = document.querySelector(`.message-row[data-id="${msg.id}"]`);
+                        if (row) {
+                            row.classList.remove('unread');
+                            const dot = row.querySelector('.unread-dot');
+                            if (dot) dot.remove();
+                        }
+                    }
+                })
+                .catch(err => console.error('Error marking as read:', err));
+            }
         }
 
         function closeViewModal() {
@@ -654,10 +695,20 @@ elseif ($activeTab === 'sent') {
 
         function sendMessage(e) {
             e.preventDefault();
-            const subject = document.querySelector('#composeModal input[name="subject"]').value;
-            const message = document.querySelector('#composeModal textarea[name="message"]').value;
+            const subject = document.getElementById('subjectInput').value;
+            const message = document.getElementById('messageBody').value;
             const recipientType = document.getElementById('recipientType').value;
             
+            // Final check
+            if (subject.trim().length < 2 || !/[a-zA-Z]/.test(subject)) {
+                alert('Subject must be at least 2 characters and contain letters.');
+                return;
+            }
+            if (message.trim().length < 3 || !/[a-zA-Z]/.test(message)) {
+                alert('Message must be at least 3 characters and contain letters.');
+                return;
+            }
+
             let data = new URLSearchParams();
             data.append('subject', subject);
             data.append('message', message);

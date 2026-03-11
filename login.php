@@ -143,8 +143,9 @@ require_once 'includes/auth.php';
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     token: token,
-                    name: additionalData.name || null,
-                    phone: additionalData.phone || null
+                    name: additionalData.name || user.displayName || null,
+                    photoURL: user.photoURL || null,
+                    phone: additionalData.phone || user.phoneNumber || null
                 })
             });
 

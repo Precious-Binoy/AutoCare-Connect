@@ -5,6 +5,7 @@
 
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/notification_helper.php';
 
 // Check if user is logged in
 if (!isLoggedIn()) {
@@ -62,6 +63,15 @@ if ($insertResult) {
     $updateQuery = "INSERT INTO service_updates (booking_id, status, message, progress_percentage) 
                     VALUES (?, 'Booking Created', 'Your service booking has been created and is pending confirmation', 0)";
     executeQuery($updateQuery, [$bookingId], 'i');
+    
+    // Notify all admins about the new booking
+    $customerName = $_SESSION['user_name'] ?? 'A customer';
+    notifyAdmins(
+        "📋 New Booking Request",
+        "{$customerName} has submitted a new service booking for {$serviceType}. Booking #{$bookingNumber}",
+        'booking',
+        'admin_bookings.php'
+    );
     
     sendJsonResponse([
         'success' => true,

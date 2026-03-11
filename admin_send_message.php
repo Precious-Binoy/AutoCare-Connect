@@ -2,6 +2,7 @@
 require_once 'includes/auth.php';
 require_once 'config/db.php';
 require_once 'includes/functions.php';
+require_once 'includes/notification_helper.php';
 
 if (!isLoggedIn() || $_SESSION['user_role'] !== 'admin') {
     header('Location: login.php');
@@ -20,6 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     
     if (empty($message_title) || empty($message_content)) {
         $errorMessage = 'Please fill in all fields.';
+    } elseif (!isPlausibleText($message_title, 2)) {
+        $errorMessage = 'Title must be at least 2 characters long and contain at least one letter.';
+    } elseif (!isPlausibleText($message_content, 3)) {
+        $errorMessage = 'Message must be at least 3 characters long and contain at least one letter.';
     } else {
         $conn->begin_transaction();
         try {
@@ -117,17 +122,19 @@ $page_title = 'Send Message to Workers';
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fa-solid fa-heading mr-2 text-blue-600"></i>Message Title
                                 </label>
-                                <input type="text" name="message_title" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Important Announcement" required>
+                                <input type="text" name="message_title" id="message_title" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Important Announcement" required>
+                                <p id="title_error" class="hidden text-xs text-red-600 mt-1"></p>
                             </div>
 
                             <div class="mb-6">
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fa-solid fa-message mr-2 text-blue-600"></i>Message Content
                                 </label>
-                                <textarea name="message_content" rows="6" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter your message here..." required></textarea>
+                                <textarea name="message_content" id="message_content" rows="6" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Enter your message here..." required></textarea>
+                                <p id="content_error" class="hidden text-xs text-red-600 mt-1"></p>
                             </div>
 
-                            <button type="submit" name="send_message" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-lg">
+                            <button type="submit" name="send_message" id="submit_btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-lg">
                                 <i class="fa-solid fa-paper-plane mr-2"></i>Send Message
                             </button>
                         </form>
@@ -202,5 +209,64 @@ $page_title = 'Send Message to Workers';
             </div>
         </main>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const titleInput = document.getElementById('message_title');
+            const contentInput = document.getElementById('message_content');
+            const submitBtn = document.getElementById('submit_btn');
+            const titleError = document.getElementById('title_error');
+            const contentError = document.getElementById('content_error');
+
+            function validateText(text, minLength) {
+                const trimmed = text.trim();
+                if (trimmed.length < minLength) return { valid: false, msg: `Must be at least ${minLength} characters.` };
+                if (!/[a-zA-Z]/.test(trimmed)) return { valid: false, msg: "Must contain at least one letter." };
+                return { valid: true };
+            }
+
+            function updateValidation() {
+                const titleRes = validateText(titleInput.value, 2);
+                const contentRes = validateText(contentInput.value, 3);
+
+                if (titleInput.value.trim() !== '') {
+                    if (!titleRes.valid) {
+                        titleError.textContent = titleRes.msg;
+                        titleError.classList.remove('hidden');
+                        titleInput.classList.add('border-red-500');
+                    } else {
+                        titleError.classList.add('hidden');
+                        titleInput.classList.remove('border-red-500');
+                    }
+                } else {
+                    titleError.classList.add('hidden');
+                    titleInput.classList.remove('border-red-500');
+                }
+
+                if (contentInput.value.trim() !== '') {
+                    if (!contentRes.valid) {
+                        contentError.textContent = contentRes.msg;
+                        contentError.classList.remove('hidden');
+                        contentInput.classList.add('border-red-500');
+                    } else {
+                        contentError.classList.add('hidden');
+                        contentInput.classList.remove('border-red-500');
+                    }
+                } else {
+                    contentError.classList.add('hidden');
+                    contentInput.classList.remove('border-red-500');
+                }
+
+                submitBtn.disabled = !titleRes.valid || !contentRes.valid;
+                submitBtn.classList.toggle('opacity-50', submitBtn.disabled);
+                submitBtn.classList.toggle('cursor-not-allowed', submitBtn.disabled);
+            }
+
+            titleInput.addEventListener('input', updateValidation);
+            contentInput.addEventListener('input', updateValidation);
+
+            // Initial validation check
+            updateValidation();
+        });
+    </script>
 </body>
 </html>

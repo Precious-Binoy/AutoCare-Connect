@@ -106,8 +106,8 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                                                         <i class="fa-solid fa-car text-sm"></i>
                                                     </div>
                                                     <div>
-                                                        <div class="font-black text-sm text-gray-900"><?php echo htmlspecialchars($b['make'] . ' ' . $b['model']); ?></div>
-                                                        <div class="text-[10px] text-muted font-bold tracking-tight"><?php echo htmlspecialchars($b['license_plate']); ?></div>
+                                                        <div class="font-black text-[10px] text-gray-900"><?php echo htmlspecialchars($b['make'] . ' ' . $b['model']); ?></div>
+                                                        <div class="text-[9px] text-muted font-bold tracking-tight"><?php echo htmlspecialchars($b['license_plate']); ?></div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -115,16 +115,23 @@ $bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
                                                 <td class="p-5 text-sm font-bold text-gray-700"><?php echo htmlspecialchars($b['customer_name'] ?? 'N/A'); ?></td>
                                             <?php endif; ?>
                                             <td class="p-5">
-                                                <div class="text-sm font-bold text-gray-800"><?php echo htmlspecialchars($b['service_type']); ?></div>
+                                                <div class="text-[10px] font-bold text-gray-800"><?php echo htmlspecialchars($b['service_type']); ?></div>
                                                 <div class="text-[9px] text-muted uppercase font-black"><?php echo htmlspecialchars($b['service_category']); ?></div>
                                             </td>
                                             <td class="p-5">
-                                                <span class="badge <?php echo getStatusBadgeClass($b['status']); ?> text-[9px] font-black uppercase tracking-tighter px-3 py-1 rounded-full">
-                                                    <?php echo formatStatusLabel($b['status']); ?>
+                                                <?php 
+                                                    $displayStatus = $b['status'];
+                                                    $isPaid = ($b['payment_status'] ?? 'unpaid') === 'paid';
+                                                    if ($displayStatus === 'ready_for_delivery' && $isPaid) {
+                                                        $displayStatus = 'delivered'; // This shows "Completed" with green badge
+                                                    }
+                                                ?>
+                                                <span class="badge <?php echo getStatusBadgeClass($displayStatus); ?> text-[9px] font-black uppercase tracking-tighter px-3 py-1 rounded-full">
+                                                    <?php echo formatStatusLabel($displayStatus); ?>
                                                 </span>
                                             </td>
                                             <td class="p-5 whitespace-nowrap">
-                                                <div class="text-xs font-black text-gray-500"><?php echo date('M d, Y', strtotime($b['created_at'])); ?></div>
+                                                <div class="text-[10px] font-black text-gray-500"><?php echo date('M d, Y', strtotime($b['created_at'])); ?></div>
                                                 <div class="text-[9px] text-muted"><?php echo date('h:i A', strtotime($b['created_at'])); ?></div>
                                             </td>
                                             <!-- Bill / Pay column -->

@@ -16,11 +16,11 @@ $pendingQuery = "SELECT COUNT(*) as count FROM bookings WHERE status = 'pending'
 $pendingResult = executeQuery($pendingQuery, [], '');
 $pendingCount = ($pendingResult && $row = $pendingResult->fetch_assoc()) ? $row['count'] : 0;
 
-$inProgressQuery = "SELECT COUNT(*) as count FROM bookings WHERE status = 'in_progress'";
+$inProgressQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('confirmed', 'in_progress')";
 $inProgressResult = executeQuery($inProgressQuery, [], '');
 $inProgressCount = ($inProgressResult && $row = $inProgressResult->fetch_assoc()) ? $row['count'] : 0;
 
-$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE (status = 'completed' OR status = 'delivered') AND DATE(completion_date) = CURDATE()";
+$completedTodayQuery = "SELECT COUNT(*) as count FROM bookings WHERE status IN ('completed', 'delivered', 'ready_for_delivery') AND DATE(completion_date) = CURDATE()";
 $completedTodayResult = executeQuery($completedTodayQuery, [], '');
 $completedToday = ($completedTodayResult && $row = $completedTodayResult->fetch_assoc()) ? $row['count'] : 0;
 
@@ -53,7 +53,7 @@ if ($bookingsResult) {
     while ($row = $bookingsResult->fetch_assoc()) {
         // Add 'vehicle' field for consistency with existing code
         $row['vehicle'] = $row['make'] . ' ' . $row['model'];
-        if (in_array($row['status'], ['completed', 'delivered', 'cancelled'])) {
+        if (in_array($row['status'], ['completed', 'delivered', 'cancelled', 'ready_for_delivery'])) {
             $bookingHistory[] = $row;
         } else {
             $activeBookings[] = $row;
@@ -101,32 +101,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param("i", $mechanic_id);
             $stmt->execute();
             
-            // Get mechanic user_id for notification
+            // Get mechanic user_id and booking data for notification
             $mechanicRes = $conn->query("SELECT user_id FROM mechanics WHERE id = $mechanic_id");
+            $customerData = $conn->query("SELECT b.user_id, b.booking_number, b.service_type, u.name as customer_name 
+                                          FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.id = $booking_id");
+            $bookingRow = $customerData->fetch_assoc();
+            
             if ($mechanicRow = $mechanicRes->fetch_assoc()) {
-                // Send notification to mechanic using helper
+                // Notify assigned mechanic
                 notifyWorker(
                     $mechanicRow['user_id'],
                     "🔧 New Job Assigned",
-                    "You have been assigned a new repair job. Check your dashboard for details.",
-                    'assignment'
+                    "You have been assigned to service booking #{$bookingRow['booking_number']} ({$bookingRow['service_type']}). Check your dashboard for details.",
+                    'assignment',
+                    'mechanic_dashboard.php?tab=jobs'
+                );
+                
+                // Notify all other available mechanics about the new job opportunity
+                $allMechanicsQuery = "SELECT user_id FROM mechanics WHERE is_available = TRUE AND id != $mechanic_id";
+                $allMechanicsRes = $conn->query($allMechanicsQuery);
+                while ($mRow = $allMechanicsRes->fetch_assoc()) {
+                    notifyUser(
+                        $mRow['user_id'],
+                        "🔧 New Job Available",
+                        "A new {$bookingRow['service_type']} service job has been confirmed. Check for available assignments.",
+                        'assignment',
+                        'mechanic_dashboard.php?tab=jobs'
+                    );
+                }
+            }
+
+            // Notify customer: service confirmed + mechanic assigned
+            if ($bookingRow) {
+                notifyCustomer(
+                    $bookingRow['user_id'],
+                    "✅ Service Confirmed",
+                    "Your booking #{$bookingRow['booking_number']} ({$bookingRow['service_type']}) has been confirmed and a mechanic has been assigned. Work will begin soon!",
+                    'booking',
+                    'track_service.php'
                 );
             }
 
             $conn->commit();
             $successMessage = "Mechanic assigned successfully!";
-            
-            // Send notification to customer
-            $customerQuery = "SELECT user_id FROM bookings WHERE id = ?";
-            $customerResult = $conn->query("SELECT user_id FROM bookings WHERE id = $booking_id");
-            if ($customerRow = $customerResult->fetch_assoc()) {
-                notifyCustomer(
-                    $customerRow['user_id'],
-                    "🔧 Mechanic Assigned",
-                    "A mechanic has been assigned to your vehicle. Repair work will begin soon.",
-                    'booking'
-                );
-            }
         } catch (Exception $e) {
             $conn->rollback();
         }
@@ -145,23 +162,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dStmt->execute();
             $dRes = $dStmt->get_result()->fetch_assoc();
             
+            // Get booking and pickup/delivery type details
+            $pdTypeStmt = $conn->prepare("SELECT pd.type, b.user_id, b.booking_number, b.service_type 
+                                          FROM pickup_delivery pd 
+                                          JOIN bookings b ON pd.booking_id = b.id 
+                                          WHERE pd.id = ?");
+            $pdTypeStmt->bind_param("i", $pd_id);
+            $pdTypeStmt->execute();
+            $pdInfo = $pdTypeStmt->get_result()->fetch_assoc();
+            $pdType = $pdInfo['type'] ?? 'pickup'; // 'pickup' or 'delivery'
+            
             // Assign Driver to SPECIFIC task (using pd_id)
             $stmt = $conn->prepare("UPDATE pickup_delivery SET driver_user_id = ?, driver_name = ?, driver_phone = ?, status = 'scheduled' WHERE id = ?");
             $stmt->bind_param("issi", $driver_user_id, $dRes['name'], $dRes['phone'], $pd_id);
             $stmt->execute();
 
-            // Mark Driver as Busy (keep this logic if drivers are limited to one task at a time)
+            // Mark Driver as Busy
             $stmt = $conn->prepare("UPDATE drivers SET is_available = FALSE WHERE user_id = ?");
             $stmt->bind_param("i", $driver_user_id);
             $stmt->execute();
             
-            // Send notification to driver using helper
-            notifyWorker(
-                $driver_user_id,
-                "🚗 New Job Assigned",
-                "You have been assigned a new pickup/delivery job. Check your dashboard for details.",
-                'assignment'
-            );
+            // Notify driver with appropriate message based on type
+            if ($pdType === 'pickup') {
+                notifyWorker(
+                    $driver_user_id,
+                    "🚗 Pickup Job Assigned",
+                    "You have been assigned to pick up vehicle for booking #{$pdInfo['booking_number']} ({$pdInfo['service_type']}). Check your dashboard for address details.",
+                    'assignment',
+                    'driver_dashboard.php?tab=jobs'
+                );
+                // Notify customer: pickup driver assigned
+                if ($pdInfo['user_id']) {
+                    notifyCustomer(
+                        $pdInfo['user_id'],
+                        "🚗 Driver Assigned for Pickup",
+                        "A driver ({$dRes['name']}) has been assigned to pick up your vehicle. Please have your vehicle ready.",
+                        'pickup',
+                        'track_service.php'
+                    );
+                }
+            } else {
+                notifyWorker(
+                    $driver_user_id,
+                    "🚚 Delivery Job Assigned",
+                    "You have been assigned to deliver vehicle for booking #{$pdInfo['booking_number']}. Check your dashboard for address details.",
+                    'assignment',
+                    'driver_dashboard.php?tab=jobs'
+                );
+                // Notify customer: return driver assigned
+                if ($pdInfo['user_id']) {
+                    notifyCustomer(
+                        $pdInfo['user_id'],
+                        "🚚 Return Driver Assigned",
+                        "Your serviced vehicle is on the way! Driver {$dRes['name']} is delivering your vehicle back to you.",
+                        'delivery',
+                        'track_service.php'
+                    );
+                }
+            }
 
             $conn->commit();
             $successMessage = "Driver assigned successfully!";
@@ -190,8 +248,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="page-content">
                 <div class="flex justify-between items-center mb-6">
                     <div>
-                        <h1 class="text-2xl font-bold">Manage Bookings</h1>
-                        <p class="text-muted">View and manage all service requests, assignments, and statuses.</p>
+                        <div class="text-[9px] font-black uppercase text-gray-900 tracking-widest leading-none">Manage Bookings</div>
+                        <p class="text-[7px] text-muted italic mt-1 font-medium">View and manage all service requests, assignments, and statuses.</p>
                     </div>
                     <a href="admin_income_report.php" class="btn btn-primary flex items-center gap-2 px-6 py-2.5 rounded-xl shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
                         <i class="fa-solid fa-file-invoice-dollar"></i>
@@ -204,6 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php echo htmlspecialchars($successMessage); ?>
                     </div>
                 <?php endif; ?>
+
 
                 <!-- Admin Stats -->
                 <div class="grid gap-4 mb-8" style="grid-template-columns: repeat(4, 1fr);">
@@ -254,48 +313,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <!-- Filters -->
-                <div class="flex justify-between items-center mb-4">
-                    <div class="text-sm text-muted">
-                        <!-- Empty space for balance -->
+                <div class="flex justify-between items-center mb-8">
+                    <div id="resultsCounter" class="text-xs font-bold text-muted uppercase tracking-widest bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
+                        <!-- Results count will appear here -->
                     </div>
                     <div class="flex items-center gap-3">
-                        <div id="resultsCounter" class="text-sm text-muted font-medium">
-                            <!-- Results count will appear here -->
+                        <span class="text-[7px] font-black text-muted uppercase tracking-widest whitespace-nowrap">Filter By:</span>
+                        <div class="relative inline-block">
+                            <div class="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted text-xs">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </div>
+                            <select id="statusFilter" class="form-control pl-10 pr-4 py-2 text-xs font-bold rounded-xl border-gray-200 focus:border-primary transition-all shadow-sm appearance-none bg-white" style="width: 160px; cursor: pointer;">
+                                <option value="">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="ready_for_delivery">Ready for Delivery</option>
+                            </select>
                         </div>
-                        <select id="statusFilter" class="form-control" style="width: 180px;">
-                            <option value="">All Statuses</option>
-                            <option value="pending">Pending</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="ready_for_delivery">Ready for Delivery</option>
-                            <option value="completed">Completed</option>
-                        </select>
                     </div>
                 </div>
 
                 <!-- Active Bookings -->
-                <div class="mb-4">
-                    <h2 class="text-xl font-bold mb-2">Active Bookings</h2>
-                    <p class="text-sm text-muted">Manage ongoing services and assignments.</p>
+                <div class="mb-3">
+                    <div class="text-[7px] font-black uppercase text-gray-900 tracking-widest leading-none">Active Bookings</div>
+                    <p class="text-[7px] text-muted italic mt-0.5 font-medium">Manage ongoing services and assignments.</p>
                 </div>
-                <div class="card mb-8" style="padding: 0; overflow: hidden;">
+                <div class="card mb-8 no-hover" style="padding: 0; overflow: hidden;">
                      <div style="overflow-x: auto;">
                         <table class="w-full text-left" style="min-width: 800px;">
                             <thead style="background: #F8FAFC; border-bottom: 1px solid var(--border);">
                                 <tr>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Booking ID</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Customer & Vehicle</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Service</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Date</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Status</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Assignee Info</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Payment</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Logistics Summary</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Booking ID</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Customer & Vehicle</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Service</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Date</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest text-center leading-none">Status</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Mechanic Assigned</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest text-center leading-none">Payment</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Logistics Summary</th>
                                 </tr>
                             </thead>
                             <tbody class="text-sm">
                                 <?php if (empty($activeBookings)): ?>
                                     <tr>
-                                        <td colspan="8" class="p-4 text-center text-muted italic">No active bookings under management.</td>
+                                        <td colspan="8" class="p-3 text-center text-muted italic text-[11px]">No active bookings under management.</td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($activeBookings as $booking): ?>
@@ -305,28 +367,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         elseif ($booking['status'] === 'in_progress') $badgeClass = 'badge-info';
                                         elseif ($booking['status'] === 'ready_for_delivery') $badgeClass = 'badge-primary';
                                         ?>
-                                        <tr style="border-bottom: 1px solid var(--border);" data-status="<?php echo strtolower($booking['status']); ?>">
-                                            <td class="p-4 font-bold">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
-                                            <td class="p-4" data-customer="<?php echo htmlspecialchars($booking['customer_name'] ?? ''); ?>" data-vehicle="<?php echo htmlspecialchars($booking['vehicle'] ?? ''); ?>" data-plate="<?php echo htmlspecialchars($booking['license_plate'] ?? ''); ?>">
-                                                <div class="font-bold"><?php echo htmlspecialchars($booking['customer_name'] ?? 'Unknown'); ?></div>
-                                                <div class="text-xs text-muted"><?php echo htmlspecialchars($booking['vehicle'] ?? 'N/A'); ?></div>
-                                                <div class="text-[10px] text-primary font-mono font-bold"><?php echo htmlspecialchars($booking['license_plate'] ?? 'N/A'); ?></div>
+                                         <tr style="border-bottom: 1px solid var(--border);" data-status="<?php echo strtolower($booking['status']); ?>">
+                                            <td class="p-3 font-mono text-[11px] font-bold text-gray-400">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
+                                            <td class="p-3" data-customer="<?php echo htmlspecialchars($booking['customer_name'] ?? ''); ?>" data-vehicle="<?php echo htmlspecialchars($booking['vehicle'] ?? ''); ?>" data-plate="<?php echo htmlspecialchars($booking['license_plate'] ?? ''); ?>">
+                                                <div class="font-bold text-gray-900 border-l-2 border-primary/20 pl-2"><?php echo htmlspecialchars($booking['customer_name'] ?? 'Unknown'); ?></div>
+                                                <div class="text-[11px] text-muted font-medium pl-2"><?php echo htmlspecialchars($booking['vehicle'] ?? 'N/A'); ?></div>
+                                                <div class="text-[9px] text-primary font-black tracking-widest pl-2 mt-0.5"><?php echo htmlspecialchars($booking['license_plate'] ?? 'N/A'); ?></div>
                                             </td>
-                                            <td class="p-4">
-                                                <div class="text-xs"><?php echo htmlspecialchars($booking['service_type']); ?></div>
+                                            <td class="p-3">
+                                                <div class="text-[11px] font-bold text-gray-700"><?php echo htmlspecialchars($booking['service_type']); ?></div>
                                             </td>
-                                            <td class="p-4">
-                                                <div class="font-bold text-gray-700"><?php echo $booking['preferred_date'] ? date('M d, Y', strtotime($booking['preferred_date'])) : 'N/A'; ?></div>
+                                            <td class="p-3">
+                                                <div class="font-bold text-[11px] text-gray-600"><?php echo $booking['preferred_date'] ? date('M d, Y', strtotime($booking['preferred_date'])) : 'N/A'; ?></div>
                                             </td>
-                                            <td class="p-4">
-                                                <span class="badge <?php echo $badgeClass; ?> text-[10px]"><?php echo formatStatusLabel($booking['status']); ?></span>
+                                            <td class="p-3 text-center">
+                                                <span class="badge <?php echo $badgeClass; ?> text-[9px] font-black uppercase px-2 py-0.5 rounded-md"><?php echo formatStatusLabel($booking['status']); ?></span>
                                             </td>
-                                             <td class="p-4">
-                                                <!-- Mechanic Assignment -->
+                                             <td class="p-3">
+                                                <!-- Mechanic Assigned -->
                                                 <?php if ($booking['mechanic_id']): ?>
-                                                    <div class="flex items-center gap-1.5 text-gray-700">
-                                                        <i class="fa-solid fa-screwdriver-wrench text-[10px] text-primary"></i>
-                                                        <span class="text-xs font-bold"><?php echo htmlspecialchars($booking['mechanic_name']); ?></span>
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-[10px] font-black">
+                                                            <?php echo strtoupper(substr($booking['mechanic_name'], 0, 1)); ?>
+                                                        </div>
+                                                        <span class="text-[11px] font-black text-gray-800"><?php echo htmlspecialchars($booking['mechanic_name']); ?></span>
                                                     </div>
                                                 <?php else: ?>
                                                     <form method="POST" class="flex items-center gap-1">
@@ -344,18 +408,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                     </form>
                                                 <?php endif; ?>
                                             </td>
-                                            <td class="p-4">
-                                                <div class="text-[10px] font-bold text-gray-700">
+                                             <td class="p-3 text-center">
+                                                <div class="text-[9px] font-black leading-tight border border-gray-100 rounded-lg p-1.5 bg-gray-50/30">
                                                     <?php if ($booking['payment_status'] === 'paid'): ?>
-                                                        <span class="text-success"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                                                        <span class="text-success flex items-center justify-center gap-1"><i class="fa-solid fa-check-circle"></i> PAID</span>
                                                     <?php elseif ($booking['is_billed']): ?>
-                                                        <span class="text-warning"><i class="fa-solid fa-clock"></i> Pending (₹<?php echo number_format($booking['final_cost']); ?>)</span>
+                                                        <span class="text-warning flex flex-col items-center gap-0.5">
+                                                            <?php if ((float)($booking['final_cost'] ?? 0) > 0): ?>
+                                                                <span><i class="fa-solid fa-clock-rotate-left"></i> UNPAID</span>
+                                                            <?php endif; ?>
+                                                            <span class="text-gray-900">₹<?php echo number_format((float)($booking['final_cost'] ?? 0)); ?></span>
+                                                        </span>
                                                     <?php else: ?>
-                                                        <span class="text-muted italic">Not Billed</span>
+                                                        <span class="text-muted italic opacity-50">NOT BILLED</span>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
-                                            <td class="p-4">
+                                            <td class="p-3">
                                                 <?php 
                                                     $pdQuery = "SELECT id, type, driver_name, status FROM pickup_delivery WHERE booking_id = ?";
                                                     $pdRes = executeQuery($pdQuery, [$booking['id']], 'i');
@@ -450,29 +519,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <!-- Booking History -->
-                <div class="mb-4 pt-4 border-t border-gray-100">
-                    <h2 class="text-xl font-bold mb-2">Booking History</h2>
-                    <p class="text-sm text-muted">Completed, delivered, or cancelled services.</p>
+                <div class="mb-3 pt-3 border-t border-gray-100">
+                    <div class="text-[7px] font-black uppercase text-gray-900 tracking-widest leading-none">Booking History</div>
+                    <p class="text-[7px] text-muted italic mt-0.5 font-medium">Completed, delivered, or cancelled services.</p>
                 </div>
-                <div class="card" style="padding: 0; overflow: hidden; opacity: 0.85;">
+                <div class="card no-hover" style="padding: 0; overflow: hidden; opacity: 0.85;">
                      <div style="overflow-x: auto;">
                         <table class="w-full text-left" style="min-width: 800px;">
                             <thead style="background: #F8FAFC; border-bottom: 1px solid var(--border);">
                                 <tr>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Booking ID</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Customer & Vehicle</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Service</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Date/Time</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Status</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Assignee Info</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Payment</th>
-                                    <th class="p-4 text-xs font-semibold text-muted uppercase">Logistics Summary</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Booking ID</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Customer & Vehicle</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Service</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Date</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest text-center leading-none">Status</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Mechanic Assigned</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest text-center leading-none">Payment</th>
+                                    <th class="p-3 text-[6px] font-black text-gray-900 uppercase tracking-widest leading-none">Logistics Summary</th>
                                 </tr>
                             </thead>
                             <tbody class="text-sm">
                                 <?php if (empty($bookingHistory)): ?>
                                     <tr>
-                                        <td colspan="8" class="p-4 text-center text-muted">No history found.</td>
+                                        <td colspan="8" class="p-3 text-center text-muted text-[11px]">No history found.</td>
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($bookingHistory as $booking): ?>
@@ -480,38 +549,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $badgeClass = 'badge-success';
                                         if ($booking['status'] === 'cancelled') $badgeClass = 'badge-danger';
                                         ?>
-                                        <tr style="border-bottom: 1px solid var(--border); background: #fcfcfc;" data-status="<?php echo strtolower($booking['status']); ?>">
-                                            <td class="p-4 font-bold text-muted">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
-                                            <td class="p-4" data-customer="<?php echo htmlspecialchars($booking['customer_name'] ?? ''); ?>" data-vehicle="<?php echo htmlspecialchars($booking['vehicle'] ?? ''); ?>" data-plate="<?php echo htmlspecialchars($booking['license_plate'] ?? ''); ?>">
-                                                <div class="font-bold"><?php echo htmlspecialchars($booking['customer_name'] ?? 'Unknown'); ?></div>
-                                                <div class="text-xs text-muted"><?php echo htmlspecialchars($booking['vehicle'] ?? 'N/A'); ?></div>
-                                                <div class="text-[10px] text-primary font-mono font-bold"><?php echo htmlspecialchars($booking['license_plate'] ?? 'N/A'); ?></div>
+                                         <tr style="border-bottom: 1px solid var(--border); background: #fcfcfc;" data-status="<?php echo strtolower($booking['status']); ?>">
+                                            <td class="p-3 font-mono text-[11px] font-bold text-gray-400">#<?php echo htmlspecialchars($booking['booking_number']); ?></td>
+                                            <td class="p-3" data-customer="<?php echo htmlspecialchars($booking['customer_name'] ?? ''); ?>" data-vehicle="<?php echo htmlspecialchars($booking['vehicle'] ?? ''); ?>" data-plate="<?php echo htmlspecialchars($booking['license_plate'] ?? ''); ?>">
+                                                <div class="font-bold text-gray-900 border-l-2 border-gray-200 pl-2"><?php echo htmlspecialchars($booking['customer_name'] ?? 'Unknown'); ?></div>
+                                                <div class="text-[11px] text-muted font-medium pl-2"><?php echo htmlspecialchars($booking['vehicle'] ?? 'N/A'); ?></div>
+                                                <div class="text-[9px] text-primary font-black tracking-widest pl-2 mt-0.5"><?php echo htmlspecialchars($booking['license_plate'] ?? 'N/A'); ?></div>
                                             </td>
-                                            <td class="p-4">
-                                                <div class="text-xs"><?php echo htmlspecialchars($booking['service_type']); ?></div>
+                                            <td class="p-3">
+                                                <div class="text-[11px] font-bold text-gray-500"><?php echo htmlspecialchars($booking['service_type']); ?></div>
                                             </td>
-                                            <td class="p-4">
-                                                <div><?php echo $booking['preferred_date'] ? date('M d, Y', strtotime($booking['preferred_date'])) : 'N/A'; ?></div>
+                                            <td class="p-3">
+                                                <div class="text-[11px] font-medium text-gray-500"><?php echo $booking['preferred_date'] ? date('M d, Y', strtotime($booking['preferred_date'])) : 'N/A'; ?></div>
                                             </td>
-                                            <td class="p-4"><span class="badge <?php echo $badgeClass; ?>"><?php echo formatStatusLabel($booking['status']); ?></span></td>
-                                             <td class="p-4">
-                                                <div class="text-xs font-bold text-gray-700">
-                                                    <i class="fa-solid fa-screwdriver-wrench mr-1"></i> 
-                                                    <?php echo $booking['mechanic_name'] ? htmlspecialchars($booking['mechanic_name']) : 'Not Assigned'; ?>
+                                            <td class="p-3 text-center"><span class="badge <?php echo $badgeClass; ?> text-[9px] font-black uppercase px-2 py-0.5 rounded-md"><?php echo formatStatusLabel($booking['status']); ?></span></td>
+                                             <td class="p-3">
+                                                <div class="flex items-center gap-2 grayscale opacity-70">
+                                                    <div class="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-[9px] font-black border border-gray-200">
+                                                        <?php echo $booking['mechanic_name'] ? strtoupper(substr($booking['mechanic_name'], 0, 1)) : '?'; ?>
+                                                    </div>
+                                                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-tight"><?php echo $booking['mechanic_name'] ? htmlspecialchars($booking['mechanic_name']) : 'N/A'; ?></span>
                                                 </div>
                                             </td>
-                                             <td class="p-4">
-                                                <div class="text-[10px] font-bold text-gray-700">
+                                             <td class="p-3 text-center">
+                                                <div class="text-[9px] font-black leading-tight border border-gray-100 rounded-lg p-1.5 bg-gray-50/30">
                                                     <?php if ($booking['payment_status'] === 'paid'): ?>
-                                                        <span class="text-success"><i class="fa-solid fa-circle-check"></i> Completed</span>
+                                                        <span class="text-success flex items-center justify-center gap-1"><i class="fa-solid fa-check-circle"></i> PAID</span>
                                                     <?php elseif ($booking['is_billed']): ?>
-                                                        <span class="text-warning"><i class="fa-solid fa-clock"></i> Pending (₹<?php echo number_format($booking['final_cost']); ?>)</span>
+                                                        <span class="text-warning flex flex-col items-center gap-0.5">
+                                                            <?php if ((float)($booking['final_cost'] ?? 0) > 0): ?>
+                                                                <span><i class="fa-solid fa-clock-rotate-left"></i> UNPAID</span>
+                                                            <?php endif; ?>
+                                                            <span class="text-gray-900">₹<?php echo number_format((float)($booking['final_cost'] ?? 0)); ?></span>
+                                                        </span>
                                                     <?php else: ?>
-                                                        <span class="text-muted italic">Not Billed</span>
+                                                        <span class="text-muted italic opacity-50">NOT BILLED</span>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>
-                                             <td class="p-4 text-xs">
+                                             <td class="p-3 text-xs">
                                                  <div class="flex gap-4">
                                                      <?php 
                                                         $pdQuery = "SELECT * FROM pickup_delivery WHERE booking_id = ?";
@@ -519,8 +595,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                         if ($pdResult): 
                                                             while($task = $pdResult->fetch_assoc()): ?>
                                                                 <div class="flex flex-col gap-0.5">
-                                                                    <span class="text-[9px] font-black uppercase text-gray-400"><?php echo $task['type']; ?></span>
-                                                                    <span class="font-bold text-gray-600"><?php echo $task['driver_name'] ? htmlspecialchars($task['driver_name']) : 'N/A'; ?></span>
+                                                                    <span class="text-[8px] font-black uppercase text-gray-400 tracking-tighter leading-none"><?php echo $task['type']; ?></span>
+                                                                    <span class="text-[10px] font-bold text-gray-500 leading-tight"><?php echo $task['driver_name'] ? htmlspecialchars($task['driver_name']) : 'N/A'; ?></span>
                                                                 </div>
                                                             <?php endwhile;
                                                         endif;

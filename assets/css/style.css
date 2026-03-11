@@ -1202,16 +1202,7 @@ select.form-control {
     cursor: pointer;
 }
 
-/* Hide native date picker indicator visually but keep active */
-input[type="date"]::-webkit-calendar-picker-indicator {
-    opacity: 0 !important;
-    position: absolute !important;
-    right: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    cursor: pointer !important;
-}
+
 
 .search-bar {
     position: relative;

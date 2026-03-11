@@ -25,6 +25,8 @@ $incomeQuery = "SELECT
                 FROM bookings b
                 JOIN users u ON b.user_id = u.id
                 WHERE b.status IN ('completed', 'delivered') 
+                AND b.final_cost IS NOT NULL
+                AND b.final_cost > 0
                 AND DATE(b.completion_date) BETWEEN ? AND ?
                 ORDER BY b.completion_date DESC";
 
@@ -37,13 +39,15 @@ $totalFinalIncome = 0;
 
 if ($incomeResult) {
     while ($row = $incomeResult->fetch_assoc()) {
-        $row['parts_cost'] = $row['parts_cost'] ?? 0;
-        $row['delivery_fees'] = $row['delivery_fees'] ?? 0;
+        $row['mechanic_fee']  = (float)($row['mechanic_fee'] ?? 0);
+        $row['parts_cost']    = (float)($row['parts_cost'] ?? 0);
+        $row['delivery_fees'] = (float)($row['delivery_fees'] ?? 0);
+        $row['final_cost']    = (float)($row['final_cost'] ?? 0);
         $reportData[] = $row;
-        $totalMechanicFees += $row['mechanic_fee'];
-        $totalPartsCost += $row['parts_cost'];
-        $totalDeliveryFees += $row['delivery_fees'];
-        $totalFinalIncome += $row['final_cost'];
+        $totalMechanicFees  += $row['mechanic_fee'];
+        $totalPartsCost     += $row['parts_cost'];
+        $totalDeliveryFees  += $row['delivery_fees'];
+        $totalFinalIncome   += $row['final_cost'];
     }
 }
 ?>
@@ -207,38 +211,41 @@ if ($incomeResult) {
 
                 <!-- Filters -->
                 <div class="card p-6 mb-8 bg-white border border-gray-100 shadow-sm no-print filters-section rounded-2xl">
-                    <form method="GET" class="flex flex-wrap items-end gap-8" id="reportFilterForm">
-                        <div class="space-y-1.5 mr-4">
-                            <label class="text-[11px] font-bold uppercase text-gray-500 tracking-wider">Start Date</label>
-                            <input type="date" name="start_date" id="start_date" value="<?php echo $start_date; ?>" max="<?php echo date('Y-m-d'); ?>" class="form-control bg-gray-50 border-gray-200 rounded-lg px-4 py-2.5 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-medium" style="min-width: 200px;">
-                        </div>
-                        <div class="space-y-1.5 mr-4">
-                            <label class="text-[11px] font-bold uppercase text-gray-500 tracking-wider">End Date</label>
-                            <input type="date" name="end_date" id="end_date" value="<?php echo $end_date; ?>" min="<?php echo $start_date; ?>" max="<?php echo date('Y-m-d'); ?>" class="form-control bg-gray-50 border-gray-200 rounded-lg px-4 py-2.5 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-medium" style="min-width: 200px;">
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <button type="submit" class="btn btn-filter px-8 py-2.5 rounded-lg font-bold shadow-lg shadow-primary/20 hover:-translate-y-0.5 hover:shadow-primary/30 transition-all">
-                                Filter Report
-                            </button>
-                            <a href="admin_income_report.php" class="btn btn-blue-soft px-6 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2">
-                                <i class="fa-solid fa-rotate-right text-xs"></i> Reset
-                            </a>
+                    <form method="GET" id="reportFilterForm">
+                        <div class="flex flex-wrap items-end gap-4">
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label for="filter_start_date" class="text-[11px] font-bold uppercase text-gray-500 tracking-wider" style="pointer-events: none;">Start Date</label>
+                                <input type="date" name="start_date" id="filter_start_date" value="<?php echo $start_date; ?>" max="<?php echo date('Y-m-d'); ?>" class="form-control bg-gray-50 border-gray-200 rounded-lg px-4 py-2.5 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-medium" style="min-width: 180px; max-width: 220px; display: block;">
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label for="filter_end_date" class="text-[11px] font-bold uppercase text-gray-500 tracking-wider" style="pointer-events: none;">End Date</label>
+                                <input type="date" name="end_date" id="filter_end_date" value="<?php echo $end_date; ?>" min="<?php echo $start_date; ?>" max="<?php echo date('Y-m-d'); ?>" class="form-control bg-gray-50 border-gray-200 rounded-lg px-4 py-2.5 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-medium" style="min-width: 180px; max-width: 220px; display: block;">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px; padding-bottom: 2px;">
+                                <button type="submit" class="btn btn-filter px-8 py-2.5 rounded-lg font-bold shadow-lg shadow-primary/20 hover:-translate-y-0.5 hover:shadow-primary/30 transition-all" style="position: relative; z-index: 10; cursor: pointer;">
+                                    <i class="fa-solid fa-filter mr-1 text-xs"></i> Filter Report
+                                </button>
+                                <a href="admin_income_report.php" class="btn btn-blue-soft px-6 py-2.5 rounded-lg font-bold transition-all flex items-center gap-2" style="position: relative; z-index: 10;">
+                                    <i class="fa-solid fa-rotate-right text-xs"></i> Reset
+                                </a>
+                            </div>
                         </div>
                     </form>
                 </div>
 
-
                 <script>
-                    // Validations
-                    const startInput = document.getElementById('start_date');
-                    const endInput = document.getElementById('end_date');
+                    // Date filter validations
+                    const startInput = document.getElementById('filter_start_date');
+                    const endInput = document.getElementById('filter_end_date');
 
-                    startInput.addEventListener('change', function() {
-                        endInput.min = this.value;
-                        if(endInput.value && endInput.value < this.value) {
-                            endInput.value = this.value;
-                        }
-                    });
+                    if (startInput && endInput) {
+                        startInput.addEventListener('change', function() {
+                            endInput.min = this.value;
+                            if(endInput.value && endInput.value < this.value) {
+                                endInput.value = this.value;
+                            }
+                        });
+                    }
                 </script>
 
                 <!-- Summary Cards -->
@@ -290,10 +297,10 @@ if ($incomeResult) {
                                         <td class="p-4 font-bold text-primary">#<?php echo $row['booking_number']; ?></td>
                                         <td class="p-4"><?php echo htmlspecialchars($row['customer_name']); ?></td>
                                         <td class="p-4 text-xs"><?php echo htmlspecialchars($row['service_type']); ?></td>
-                                        <td class="p-4 text-right">₹<?php echo number_format($row['mechanic_fee']); ?></td>
-                                        <td class="p-4 text-right">₹<?php echo number_format($row['parts_cost']); ?></td>
-                                        <td class="p-4 text-right">₹<?php echo number_format($row['delivery_fees']); ?></td>
-                                        <td class="p-4 text-right font-black">₹<?php echo number_format($row['final_cost']); ?></td>
+                                        <td class="p-4 text-right">₹<?php echo number_format($row['mechanic_fee'] ?? 0); ?></td>
+                                        <td class="p-4 text-right">₹<?php echo number_format($row['parts_cost'] ?? 0); ?></td>
+                                        <td class="p-4 text-right">₹<?php echo number_format($row['delivery_fees'] ?? 0); ?></td>
+                                        <td class="p-4 text-right font-black">₹<?php echo number_format($row['final_cost'] ?? 0); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>

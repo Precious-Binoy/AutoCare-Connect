@@ -22,11 +22,15 @@ $input = json_decode(file_get_contents('php://input'), true);
 $idTokenString = $input['token'] ?? null;
 $inputName = $input['name'] ?? null;
 $inputPhone = $input['phone'] ?? null;
+$inputPhoto = $input['photoURL'] ?? null;
 
 if (!$idTokenString) {
     echo json_encode(['success' => false, 'message' => 'No token provided']);
     exit;
 }
+
+// DEBUG: Log received input
+file_put_contents(__DIR__ . '/login_debug.log', date('Y-m-d H:i:s') . " - Input: " . json_encode($input) . "\n", FILE_APPEND);
 
 try {
     // Initialize Firebase Auth
@@ -35,15 +39,13 @@ try {
     $auth = $factory->createAuth();
 
     // Verify ID Token
-    // This checks strictly with Firebase heavily relying on the result.
-    // "check the firbase database in every time"
     $verifiedIdToken = $auth->verifyIdToken($idTokenString);
     $uid = $verifiedIdToken->claims()->get('sub');
     $email = $verifiedIdToken->claims()->get('email');
     
-    // Prioritize passed Name (from registration form) over token claim (which might be delayed) or email prefix
+    // Prioritize passed data (from registration/login frontend) over token claims
     $name = $inputName ?? $verifiedIdToken->claims()->get('name') ?? explode('@', $email)[0];
-    $picture = $verifiedIdToken->claims()->get('picture');
+    $picture = $inputPhoto ?? $verifiedIdToken->claims()->get('picture');
 
     // Token is valid. Now Sync with MySQL.
     // Check if user exists by email or google_id (using UID as google_id here for consistency, 
@@ -92,12 +94,16 @@ try {
             $updateTypes .= "s";
         }
         
-        // ONLY update profile image if it's currently empty in our DB
-        if ($hasProfileImage && $picture && empty($user['profile_image'])) {
-             $updateParts[] = "profile_image = ?";
-             $updateParams[] = $picture;
-             $updateTypes .= "s";
-             $user['profile_image'] = $picture;
+        // Update profile image if picture is provided from Google/Firebase
+        if ($hasProfileImage && $picture) {
+            // If the DB is empty or currently has a different image, update it
+            if (empty($user['profile_image']) || $user['profile_image'] !== $picture) {
+                $updateParts[] = "profile_image = ?";
+                $updateParams[] = $picture;
+                $updateTypes .= "s";
+            }
+            // Update local variable for session
+            $user['profile_image'] = $picture;
         }
 
         // Update name if provided and our local name is empty
@@ -167,13 +173,14 @@ try {
         if ($insertResult) {
             $userId = getLastInsertId();
             // Fetch the new user to be sure
-            $user = [
-                'id' => $userId,
-                'name' => $name,
-                'email' => $email,
-                'role' => 'customer',
-                'phone' => $inputPhone ?? null
-            ];
+                $user = [
+                    'id' => $userId,
+                    'name' => $name,
+                    'email' => $email,
+                    'role' => 'customer',
+                    'phone' => $inputPhone ?? null,
+                    'profile_image' => $picture
+                ];
         } else {
              echo json_encode(['success' => false, 'message' => 'Database Sync Failed: Could not create user']);
              exit;

@@ -15,6 +15,11 @@ $conn = getDbConnection();
 $user_id = $_SESSION['user_id'];
 $message = sanitizeInput($_POST['admin_message']);
 
+if (!isPlausibleText($message, 3)) {
+    echo json_encode(['success' => false, 'error' => 'Message must be at least 3 characters long and contain at least one letter.']);
+    exit;
+}
+
 // Get user details
 $userQuery = "SELECT name, role FROM users WHERE id = ?";
 $stmt = $conn->prepare($userQuery);
