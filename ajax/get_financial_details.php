@@ -86,10 +86,25 @@ if ($pdRes) {
                 <p class="text-[10px] font-black uppercase text-muted tracking-tighter">Net Payable Amount</p>
                 <p class="text-3xl font-black text-primary">₹<?php echo number_format($booking['final_cost'], 2); ?></p>
             </div>
-            <div class="text-right">
-                <span class="badge <?php echo $booking['is_billed'] ? 'badge-success' : 'badge-warning'; ?> uppercase text-[9px] px-3">
-                    <?php echo $booking['is_billed'] ? 'Billed' : 'Pending Payment'; ?>
+            <div class="text-right flex flex-col items-end gap-2">
+                <span class="badge <?php echo $booking['is_billed'] ? ($booking['payment_status'] === 'paid' ? 'badge-success' : 'badge-warning') : 'badge-warning'; ?> uppercase text-[9px] px-3">
+                    <?php 
+                    if ($booking['is_billed']) {
+                        if ($booking['payment_status'] === 'paid') {
+                            echo 'Paid via ' . ucfirst($booking['payment_method'] ?? 'Online');
+                        } else {
+                            echo 'Pending Payment';
+                        }
+                    } else {
+                        echo 'Not Billed';
+                    }
+                    ?>
                 </span>
+                <?php if ($booking['is_billed'] && $booking['payment_status'] !== 'paid'): ?>
+                <button onclick="markAsCashPaid(<?php echo $booking['id']; ?>)" class="px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 rounded-lg shadow-sm transition-all text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 w-full">
+                    <i class="fa-solid fa-money-bill-wave"></i> Mark as Paid (Cash)
+                </button>
+                <?php endif; ?>
             </div>
         </div>
     </div>

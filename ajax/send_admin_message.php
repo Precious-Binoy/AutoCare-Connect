@@ -1,18 +1,16 @@
 <?php
-session_start();
-require_once '../config/db.php';
-require_once '../includes/functions.php';
+require_once '../includes/auth.php';
 require_once '../includes/notification_helper.php';
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id']) || !isset($_POST['admin_message'])) {
+if (!isLoggedIn() || !isset($_POST['admin_message'])) {
     echo json_encode(['success' => false, 'error' => 'Invalid request']);
     exit;
 }
 
 $conn = getDbConnection();
-$user_id = $_SESSION['user_id'];
+$user_id = getCurrentUserId();
 $message = sanitizeInput($_POST['admin_message']);
 
 if (!isPlausibleText($message, 3)) {

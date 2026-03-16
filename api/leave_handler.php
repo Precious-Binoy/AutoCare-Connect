@@ -62,7 +62,7 @@ if ($method === 'POST') {
             if ($userRow = $userResult->fetch_assoc()) {
                 $notifTitle = "📋 New Leave Request";
                 $notifMessage = "{$userRow['name']} ({$userRow['role']}) has requested {$type} leave from {$start} to {$end}.";
-                notifyAdmins($notifTitle, $notifMessage, 'leave');
+                notifyAdmins($notifTitle, $notifMessage, 'leave', 'admin_leave_management.php');
             }
             
             echo json_encode(['success' => true, 'message' => 'Leave request submitted successfully']);

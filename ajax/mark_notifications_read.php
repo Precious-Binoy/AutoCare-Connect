@@ -1,16 +1,15 @@
 <?php
-session_start();
-require_once('../config/db.php');
+require_once('../includes/auth.php');
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id'])) {
+if (!isLoggedIn()) {
     echo json_encode(['success' => false, 'error' => 'Not authenticated']);
     exit;
 }
 
 $conn = getDbConnection();
-$user_id = $_SESSION['user_id'];
+$user_id = getCurrentUserId();
 
 // Mark all notifications as read
 $query = "UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0";

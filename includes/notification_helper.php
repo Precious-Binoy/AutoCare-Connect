@@ -63,7 +63,7 @@ function notifyAvailableDrivers($title, $message, $link_url = null) {
     $query = "SELECT d.user_id 
               FROM drivers d 
               JOIN users u ON d.user_id = u.id 
-              WHERE d.is_available = TRUE AND u.is_active = TRUE";
+              WHERE u.is_active = TRUE";
     $result = $conn->query($query);
     $success = true;
     while ($row = $result->fetch_assoc()) {
@@ -80,7 +80,7 @@ function notifyAvailableMechanics($title, $message, $link_url = null) {
     $query = "SELECT m.user_id 
               FROM mechanics m 
               JOIN users u ON m.user_id = u.id 
-              WHERE m.is_available = TRUE AND u.is_active = TRUE";
+              WHERE u.is_active = TRUE";
     $result = $conn->query($query);
     $success = true;
     while ($row = $result->fetch_assoc()) {

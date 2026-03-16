@@ -183,6 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                 $custRes = executeQuery($custQuery, [$booking_id], 'i');
                 if ($cust = $custRes->fetch_assoc()) {
                     notifyCustomer($cust['user_id'], '🎉 Service Complete - Delivery Coming!', "Your vehicle service is complete! A driver will be assigned shortly to return your vehicle.", 'service', 'track_service.php');
+                    notifyAvailableDrivers("🚗 New Delivery Request", "A vehicle service is complete and ready for return delivery. Booking #{$cust['booking_number']}", "driver_dashboard.php?tab=jobs&subtab=available");
                 }
             } else {
                  // Notify Customer directly if no delivery

@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadNotifications() {
-    fetch('ajax/get_notifications.php')
+    fetch('ajax/get_notifications.php?t=' + new Date().getTime())
         .then(response => response.json())
         .then(data => {
             if (!data.success) return;
@@ -254,7 +254,7 @@ function loadNotifications() {
 
 function handleNotifClick(e, linkUrl, notifId) {
     // Mark all as read when clicking any notification
-    fetch('ajax/mark_notifications_read.php', { method: 'POST' });
+    fetch('ajax/mark_notifications_read.php?t=' + new Date().getTime(), { method: 'POST' });
     // If there's a real link, navigate normally (don't prevent default)
     if (!linkUrl || linkUrl === '#') {
         e.preventDefault();
@@ -262,7 +262,7 @@ function handleNotifClick(e, linkUrl, notifId) {
 }
 
 function markNotificationsAsRead() {
-    fetch('ajax/mark_notifications_read.php', { method: 'POST' })
+    fetch('ajax/mark_notifications_read.php?t=' + new Date().getTime(), { method: 'POST' })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
@@ -276,7 +276,7 @@ function markNotificationsAsRead() {
 }
 
 function clearAllNotifications() {
-    fetch('ajax/clear_notifications.php', { method: 'POST' })
+    fetch('ajax/clear_notifications.php?t=' + new Date().getTime(), { method: 'POST' })
     .then(response => response.json())
     .then(data => {
         if (data.success) {

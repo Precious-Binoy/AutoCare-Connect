@@ -23,7 +23,7 @@ $isDriver = $userRole === 'driver';
     <nav class="nav-menu">
         <?php if ($isAdmin): ?>
             <!-- Admin Navigation -->
-            <a href="admin_dashboard.php" class="nav-item <?php echo ($current_page == 'admin_dashboard.php') ? 'active' : ''; ?>">
+            <a href="admin_dashboard.php" class="nav-item <?php echo ($current_page == 'admin_dashboard.php' && ($activeTab ?? 'dashboard') == 'dashboard') ? 'active' : ''; ?>">
                 <i class="fa-solid fa-gauge"></i> Admin Dashboard
             </a>
             <a href="admin_bookings.php" class="nav-item <?php echo ($current_page == 'admin_bookings.php') ? 'active' : ''; ?>">

@@ -17,10 +17,14 @@ $incomeQuery = "SELECT
                     b.mechanic_fee, 
                     (SELECT SUM(unit_price * quantity) FROM parts_used WHERE booking_id = b.id) as parts_cost,
                     (SELECT SUM(fee) FROM pickup_delivery WHERE booking_id = b.id AND status = 'completed') as delivery_fees,
-                    b.final_cost
+                    b.final_cost,
+                    b.payment_method
                 FROM bookings b
                 JOIN users u ON b.user_id = u.id
                 WHERE b.status IN ('completed', 'delivered') 
+                AND b.final_cost IS NOT NULL
+                AND b.final_cost > 0
+                AND b.payment_status = 'paid'
                 AND DATE(b.completion_date) BETWEEN ? AND ?
                 ORDER BY b.completion_date DESC";
 
@@ -39,7 +43,7 @@ fputcsv($output, ['Report Period:', $start_date . ' to ' . $end_date]);
 fputcsv($output, []); // Empty row for spacing
 
 // Column Headers
-fputcsv($output, ['Date', 'Booking Number', 'Customer Name', 'Service Type', 'Labor Fee', 'Parts Cost', 'Logistics', 'Total Income']);
+fputcsv($output, ['Date', 'Booking Number', 'Customer Name', 'Service Type', 'Payment Method', 'Labor Fee', 'Parts Cost', 'Logistics', 'Total Income']);
 
 if ($incomeResult) {
     while ($row = $incomeResult->fetch_assoc()) {
@@ -50,6 +54,7 @@ if ($incomeResult) {
             $row['booking_number'],
             $row['customer_name'],
             $row['service_type'],
+            ucfirst($row['payment_method'] ?? 'Online'),
             $row['mechanic_fee'],
             $parts_cost,
             $delivery_fees,

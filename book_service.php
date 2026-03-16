@@ -2,6 +2,7 @@
 require_once 'includes/auth.php';
 require_once 'config/db.php';
 require_once 'includes/functions.php';
+require_once 'includes/notification_helper.php';
 
 // Require login
 if (!isset($_SESSION['user_id'])) {
@@ -59,10 +60,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_booking'])) {
             executeQuery($insertUpdate, [$booking_id, $user_id], 'ii');
 
             // Notify Admin
-            $adminRes = $conn->query("SELECT id FROM users WHERE role = 'admin'");
             $notification_msg = "New booking #$booking_number received from " . ($_SESSION['user_name'] ?? 'Customer');
-            while ($admin = $adminRes->fetch_assoc()) {
-                executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'New Booking Request', ?, 'booking')", [$admin['id'], $notification_msg], 'is');
+            notifyAdmins('New Booking Request', $notification_msg, 'booking', 'admin_bookings.php');
+
+            // Notify Workers based on pickup preference
+            if ($has_pickup) {
+                notifyAvailableDrivers("🚗 New Pickup Request", "A new pickup request is available. Booking #$booking_number", "driver_dashboard.php?tab=jobs&subtab=available");
+            } else {
+                notifyAvailableMechanics("🔧 New Service Request", "A new drop-off service request is available. Booking #$booking_number", "mechanic_dashboard.php?tab=jobs&subtab=available");
             }
 
             $conn->commit();

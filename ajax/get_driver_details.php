@@ -1,12 +1,9 @@
-<?php
-session_start();
-require_once('../config/db.php');
 require_once('../includes/auth.php');
 
 header('Content-Type: application/json');
 
 // Require admin access
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+if (!isLoggedIn() || !hasRole('admin')) {
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit;
 }

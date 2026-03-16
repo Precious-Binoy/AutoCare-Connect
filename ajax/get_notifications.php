@@ -1,16 +1,15 @@
 <?php
-session_start();
-require_once('../config/db.php');
+require_once('../includes/auth.php');
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_id'])) {
+if (!isLoggedIn()) {
     echo json_encode(['success' => false, 'error' => 'Not authenticated']);
     exit;
 }
 
 $conn = getDbConnection();
-$user_id = $_SESSION['user_id'];
+$user_id = getCurrentUserId();
 
 // Fetch notifications for the user
 $query = "SELECT id, title, message, type, link_url, is_read, created_at 
@@ -59,10 +58,12 @@ while ($row = $result->fetch_assoc()) {
     }
 }
 
-echo json_encode([
+$response = [
     'success' => true,
     'notifications' => $notifications,
     'unread_count' => $unread_count,
     'latest_id' => $latest_id
-]);
+];
+
+echo json_encode($response);
 ?>

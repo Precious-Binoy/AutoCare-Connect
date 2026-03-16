@@ -73,6 +73,11 @@ if ($insertResult) {
         'admin_bookings.php'
     );
     
+    // Notify appropriate workers based on pickup/delivery setting (assumed 0 here as it's not in the insert)
+    // For pending drop-offs, notify mechanics directly.
+    notifyAvailableMechanics("🔧 New Service Request", "A drop-off service request is available. Booking #$bookingNumber", "mechanic_dashboard.php?tab=jobs&subtab=available");
+    
+    
     sendJsonResponse([
         'success' => true,
         'booking_id' => $bookingId,

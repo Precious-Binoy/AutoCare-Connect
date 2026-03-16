@@ -9,7 +9,7 @@ $current_page = 'admin_income_report.php';
 $page_title = 'Income Report';
 
 // Default filters
-$start_date = $_GET['start_date'] ?? date('Y-m-01');
+$start_date = $_GET['start_date'] ?? date('Y-01-01');
 $end_date = $_GET['end_date'] ?? date('Y-m-d');
 
 // Fetch Income Data
@@ -21,10 +21,12 @@ $incomeQuery = "SELECT
                     b.mechanic_fee, 
                     (SELECT SUM(unit_price * quantity) FROM parts_used WHERE booking_id = b.id) as parts_cost,
                     (SELECT SUM(fee) FROM pickup_delivery WHERE booking_id = b.id AND status = 'completed') as delivery_fees,
-                    b.final_cost
+                    b.final_cost,
+                    b.payment_method,
+                    b.payment_status
                 FROM bookings b
                 JOIN users u ON b.user_id = u.id
-                WHERE b.status IN ('completed', 'delivered') 
+                WHERE b.status IN ('completed', 'delivered', 'ready_for_delivery') 
                 AND b.final_cost IS NOT NULL
                 AND b.final_cost > 0
                 AND DATE(b.completion_date) BETWEEN ? AND ?
@@ -36,6 +38,10 @@ $totalMechanicFees = 0;
 $totalPartsCost = 0;
 $totalDeliveryFees = 0;
 $totalFinalIncome = 0;
+$totalCashIncome = 0;
+$totalOnlineIncome = 0;
+$totalReceivedMoney = 0;
+$totalPendingMoney = 0;
 
 if ($incomeResult) {
     while ($row = $incomeResult->fetch_assoc()) {
@@ -43,11 +49,25 @@ if ($incomeResult) {
         $row['parts_cost']    = (float)($row['parts_cost'] ?? 0);
         $row['delivery_fees'] = (float)($row['delivery_fees'] ?? 0);
         $row['final_cost']    = (float)($row['final_cost'] ?? 0);
+        $row['payment_status'] = strtolower($row['payment_status'] ?? '');
         $reportData[] = $row;
+        
         $totalMechanicFees  += $row['mechanic_fee'];
         $totalPartsCost     += $row['parts_cost'];
         $totalDeliveryFees  += $row['delivery_fees'];
         $totalFinalIncome   += $row['final_cost'];
+        
+        if ($row['payment_status'] === 'paid') {
+            $totalReceivedMoney += $row['final_cost'];
+            $method = trim(strtolower($row['payment_method'] ?? ''));
+            if ($method === 'cash') {
+                $totalCashIncome += $row['final_cost'];
+            } else {
+                $totalOnlineIncome += $row['final_cost'];
+            }
+        } else {
+            $totalPendingMoney += $row['final_cost'];
+        }
     }
 }
 ?>
@@ -249,22 +269,52 @@ if ($incomeResult) {
                 </script>
 
                 <!-- Summary Cards -->
-                <div class="grid gap-4 mb-8 summary-grid" style="grid-template-columns: repeat(4, 1fr);">
-                    <div class="card p-6 border-l-4 border-indigo-500 summary-card">
-                        <span class="text-muted text-xs font-bold uppercase tracking-wider">Labor Income</span>
-                        <div class="text-2xl font-black mt-2">₹<?php echo number_format($totalMechanicFees); ?></div>
+                <div class="grid gap-3 mb-4 summary-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="card p-4 border-l-4 border-success bg-success/5 summary-card">
+                        <span class="text-success text-[10px] font-bold uppercase tracking-wider">Received Money</span>
+                        <div class="text-xl font-black mt-1 text-gray-900 flex items-center gap-2">
+                             ₹<?php echo number_format($totalReceivedMoney); ?>
+                             <i class="fa-solid fa-circle-check text-success text-base opacity-50"></i>
+                        </div>
                     </div>
-                    <div class="card p-6 border-l-4 border-amber-500 summary-card">
-                        <span class="text-muted text-xs font-bold uppercase tracking-wider">Parts Revenue</span>
-                        <div class="text-2xl font-black mt-2">₹<?php echo number_format($totalPartsCost); ?></div>
+                    <div class="card p-4 border-l-4 border-warning summary-card" style="background-color: #fffbeb; border-color: #f59e0b;">
+                        <span class="text-[10px] font-bold uppercase tracking-wider" style="color: #d97706;">Pending Money</span>
+                        <div class="text-xl font-black mt-1 text-gray-900 flex items-center gap-2">
+                             ₹<?php echo number_format($totalPendingMoney); ?>
+                             <i class="fa-solid fa-clock text-base opacity-50" style="color: #d97706;"></i>
+                        </div>
                     </div>
-                    <div class="card p-6 border-l-4 border-blue-500 summary-card">
-                        <span class="text-muted text-xs font-bold uppercase tracking-wider">Logistics</span>
-                        <div class="text-2xl font-black mt-2">₹<?php echo number_format($totalDeliveryFees); ?></div>
+                    <div class="card p-4 border-l-4 border-blue-500 bg-blue-50/50 summary-card">
+                        <span class="text-blue-500 text-[10px] font-bold uppercase tracking-wider">Total Income</span>
+                        <div class="text-xl font-black mt-1 text-gray-900 flex items-center gap-2">
+                             ₹<?php echo number_format($totalFinalIncome); ?>
+                             <i class="fa-solid fa-wallet text-blue-500 text-base opacity-50"></i>
+                        </div>
                     </div>
-                    <div class="card p-6 border-l-4 border-success bg-success/5 summary-card">
-                        <span class="text-success text-xs font-bold uppercase tracking-wider">Total Net Income</span>
-                        <div class="text-3xl font-black mt-2 text-gray-900">₹<?php echo number_format($totalFinalIncome); ?></div>
+                </div>
+
+                <div class="grid gap-3 mb-8 summary-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="card p-3 border-l-4 border-indigo-500 summary-card">
+                        <span class="text-muted text-[10px] font-bold uppercase tracking-wider">Labor Income</span>
+                        <div class="text-[17px] font-black mt-1">₹<?php echo number_format($totalMechanicFees); ?></div>
+                    </div>
+                    <div class="card p-3 border-l-4 border-amber-500 summary-card">
+                        <span class="text-muted text-[10px] font-bold uppercase tracking-wider">Parts / Logistics</span>
+                        <div class="text-[11px] font-bold mt-1 text-gray-500">₹<?php echo number_format($totalPartsCost); ?> / ₹<?php echo number_format($totalDeliveryFees); ?></div>
+                        <div class="text-[17px] font-black mt-0.5">₹<?php echo number_format($totalPartsCost + $totalDeliveryFees); ?> Total</div>
+                    </div>
+                    <div class="card p-3 border-l-4 border-purple-500 summary-card">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-muted text-[10px] font-bold uppercase tracking-wider">Paid: Cash vs Online</span>
+                            <div class="flex justify-between mt-0.5 border-b border-gray-100 pb-1">
+                                <span class="text-[11px] font-bold text-gray-500">Cash:</span>
+                                <span class="text-xs font-black text-gray-900">₹<?php echo number_format($totalCashIncome); ?></span>
+                            </div>
+                            <div class="flex justify-between pt-0.5">
+                                <span class="text-[11px] font-bold text-gray-500">Online:</span>
+                                <span class="text-xs font-black text-gray-900">₹<?php echo number_format($totalOnlineIncome); ?></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -273,34 +323,51 @@ if ($incomeResult) {
                     <table class="w-full text-left">
                         <thead class="bg-gray-50 border-bottom border-gray-100">
                             <tr>
-                                <th class="p-4 text-[10px] font-black uppercase text-muted">Date</th>
+                                <th class="p-4 text-[10px] font-black uppercase text-muted w-24">Date</th>
                                 <th class="p-4 text-[10px] font-black uppercase text-muted">Booking #</th>
-                                <th class="p-4 text-[10px] font-black uppercase text-muted">Customer</th>
-                                <th class="p-4 text-[10px] font-black uppercase text-muted">Service Type</th>
+                                <th class="p-4 text-[10px] font-black uppercase text-muted">Customer & Service</th>
+                                <th class="p-4 text-[10px] font-black uppercase text-muted text-left">Method</th>
                                 <th class="p-4 text-[10px] font-black uppercase text-muted text-right">Labor</th>
                                 <th class="p-4 text-[10px] font-black uppercase text-muted text-right">Parts</th>
                                 <th class="p-4 text-[10px] font-black uppercase text-muted text-right">Logistics</th>
-                                <th class="p-4 text-[10px] font-black uppercase text-muted text-right">Total</th>
+                                <th class="p-4 text-[10px] font-black uppercase text-muted text-right">Net Total</th>
+                                <th class="p-4 text-[10px] font-black uppercase text-muted text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody class="text-sm divide-y divide-gray-50">
                             <?php if (empty($reportData)): ?>
                                 <tr>
-                                    <td colspan="8" class="p-12 text-center text-muted italic">
+                                    <td colspan="9" class="p-12 text-center text-muted italic">
                                         No income data found for the selected period.
                                     </td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($reportData as $row): ?>
                                     <tr class="hover:bg-gray-50/50 transition-colors">
-                                        <td class="p-4 font-medium"><?php echo date('M d, Y', strtotime($row['completion_date'])); ?></td>
-                                        <td class="p-4 font-bold text-primary">#<?php echo $row['booking_number']; ?></td>
-                                        <td class="p-4"><?php echo htmlspecialchars($row['customer_name']); ?></td>
-                                        <td class="p-4 text-xs"><?php echo htmlspecialchars($row['service_type']); ?></td>
-                                        <td class="p-4 text-right">₹<?php echo number_format($row['mechanic_fee'] ?? 0); ?></td>
-                                        <td class="p-4 text-right">₹<?php echo number_format($row['parts_cost'] ?? 0); ?></td>
-                                        <td class="p-4 text-right">₹<?php echo number_format($row['delivery_fees'] ?? 0); ?></td>
-                                        <td class="p-4 text-right font-black">₹<?php echo number_format($row['final_cost'] ?? 0); ?></td>
+                                        <td class="p-4 text-xs font-bold text-gray-500 tracking-tight flex flex-col gap-0.5 mt-1 border-none"><?php echo date('M d', strtotime($row['completion_date'])); ?><span class="text-[9px] font-medium opacity-60"><?php echo date('Y', strtotime($row['completion_date'])); ?></span></td>
+                                        <td class="p-4 font-mono font-bold text-primary text-xs tracking-tight">#<?php echo $row['booking_number']; ?></td>
+                                        <td class="p-4 leading-tight">
+                                            <div class="font-bold text-gray-900 text-sm"><?php echo htmlspecialchars($row['customer_name']); ?></div>
+                                            <div class="text-[10px] text-gray-500 font-medium tracking-wide"><?php echo htmlspecialchars($row['service_type']); ?></div>
+                                        </td>
+                                        <td class="p-4 text-left">
+                                            <?php if(strtolower($row['payment_method'] ?? '') === 'cash'): ?>
+                                                <span class="bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest"><i class="fa-solid fa-money-bill-wave mr-1"></i> Cash</span>
+                                            <?php else: ?>
+                                                <span class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest"><i class="fa-brands fa-cc-stripe mr-1"></i> Online</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="p-4 text-right font-medium text-gray-600">₹<?php echo number_format($row['mechanic_fee'] ?? 0); ?></td>
+                                        <td class="p-4 text-right font-medium text-gray-600">₹<?php echo number_format($row['parts_cost'] ?? 0); ?></td>
+                                        <td class="p-4 text-right font-medium text-gray-600">₹<?php echo number_format($row['delivery_fees'] ?? 0); ?></td>
+                                        <td class="p-4 text-right text-base font-black text-gray-900 border-l border-gray-100 bg-gray-50/30">₹<?php echo number_format($row['final_cost'] ?? 0); ?></td>
+                                        <td class="p-4 text-center">
+                                            <?php if($row['payment_status'] === 'paid'): ?>
+                                                <span class="bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest"><i class="fa-solid fa-check mr-1"></i> Received</span>
+                                            <?php else: ?>
+                                                <span class="px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest" style="background:#fffbeb; color:#b45309; border: 1px solid #fef3c7;"><i class="fa-solid fa-clock mr-1"></i> Pending</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -311,7 +378,8 @@ if ($incomeResult) {
                                 <td class="p-4 text-right">₹<?php echo number_format($totalMechanicFees); ?></td>
                                 <td class="p-4 text-right">₹<?php echo number_format($totalPartsCost); ?></td>
                                 <td class="p-4 text-right">₹<?php echo number_format($totalDeliveryFees); ?></td>
-                                <td class="p-4 text-right text-lg">₹<?php echo number_format($totalFinalIncome); ?></td>
+                                <td class="p-4 text-right text-xl text-primary border-l border-gray-100 bg-gray-50">₹<?php echo number_format($totalFinalIncome); ?></td>
+                                <td class="bg-gray-50"></td>
                             </tr>
                         </tfoot>
                     </table>

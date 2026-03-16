@@ -30,6 +30,14 @@ $activeWorkersQuery = "SELECT
 $activeWorkersResult = executeQuery($activeWorkersQuery, [], '');
 $activeWorkers = ($activeWorkersResult && $row = $activeWorkersResult->fetch_assoc()) ? $row['count'] : 0;
 
+// Fetch Financial Statistics
+$financeQuery = "SELECT 
+    SUM(CASE WHEN payment_status = 'paid' THEN final_cost ELSE 0 END) as total_received,
+    SUM(CASE WHEN is_billed = TRUE AND (payment_status IS NULL OR payment_status != 'paid') THEN final_cost ELSE 0 END) as total_pending
+    FROM bookings";
+$financeResult = executeQuery($financeQuery, [], '');
+$financeStats = ($financeResult && $row = $financeResult->fetch_assoc()) ? $row : ['total_received' => 0, 'total_pending' => 0];
+
 // Fetch all bookings with related data
 $bookingsQuery = "SELECT b.*, v.make, v.model, v.license_plate, u.name as customer_name, u.email as customer_email, b.payment_status,
                         m.id as mechanic_id, mu.name as mechanic_name,
@@ -265,7 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
                 <!-- Admin Stats -->
-                <div class="grid gap-4 mb-8" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="grid gap-4 mb-8" style="grid-template-columns: repeat(6, 1fr);">
                     <div class="card p-4">
                          <div class="flex justify-between">
                             <div>
@@ -308,6 +316,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                  </div>
                              </div>
                              <span class="opacity-50 text-xl"><i class="fa-solid fa-user-check"></i></span>
+                          </div>
+                     </div>
+                     <div class="card p-4 border-l-4 border-success">
+                          <div class="flex justify-between">
+                             <div>
+                                 <span class="text-muted text-[10px] font-bold uppercase tracking-widest">Received</span>
+                                 <div class="flex items-end gap-2 mt-1">
+                                     <span class="text-2xl font-bold text-success">₹<?php echo number_format($financeStats['total_received'] ?? 0); ?></span>
+                                 </div>
+                             </div>
+                             <span class="text-success text-xl opacity-50"><i class="fa-solid fa-money-bill-wave"></i></span>
+                          </div>
+                     </div>
+                     <div class="card p-4 border-l-4 border-warning">
+                          <div class="flex justify-between">
+                             <div>
+                                 <span class="text-muted text-[10px] font-bold uppercase tracking-widest">Pending</span>
+                                 <div class="flex items-end gap-2 mt-1">
+                                     <span class="text-2xl font-bold text-warning">₹<?php echo number_format($financeStats['total_pending'] ?? 0); ?></span>
+                                 </div>
+                             </div>
+                             <span class="text-warning text-xl opacity-50"><i class="fa-solid fa-clock-rotate-left"></i></span>
                           </div>
                      </div>
                 </div>
@@ -409,9 +439,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                 <?php endif; ?>
                                             </td>
                                              <td class="p-3 text-center">
-                                                <div class="text-[9px] font-black leading-tight border border-gray-100 rounded-lg p-1.5 bg-gray-50/30">
+                                                <div class="text-[9px] font-black leading-tight border border-gray-100 rounded-lg p-2 bg-gray-50/30 flex flex-col items-center gap-1.5">
                                                     <?php if ($booking['payment_status'] === 'paid'): ?>
                                                         <span class="text-success flex items-center justify-center gap-1"><i class="fa-solid fa-check-circle"></i> PAID</span>
+                                                        <span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[7px] uppercase tracking-wider"><?php echo htmlspecialchars($booking['payment_method'] ?? 'Online'); ?></span>
                                                     <?php elseif ($booking['is_billed']): ?>
                                                         <span class="text-warning flex flex-col items-center gap-0.5">
                                                             <?php if ((float)($booking['final_cost'] ?? 0) > 0): ?>
@@ -419,6 +450,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                             <?php endif; ?>
                                                             <span class="text-gray-900">₹<?php echo number_format((float)($booking['final_cost'] ?? 0)); ?></span>
                                                         </span>
+                                                        <?php if ((float)($booking['final_cost'] ?? 0) > 0): ?>
+                                                        <button onclick="markAsCashPaid(<?php echo $booking['id']; ?>)" class="mt-1 px-2 py-1 bg-white hover:bg-green-50 text-green-600 border border-green-200 hover:border-green-300 rounded shadow-sm transition-all flex items-center justify-center gap-1 w-full" title="Mark as Paid via Cash">
+                                                            <i class="fa-solid fa-money-bill-wave"></i> Cash
+                                                        </button>
+                                                        <?php endif; ?>
                                                     <?php else: ?>
                                                         <span class="text-muted italic opacity-50">NOT BILLED</span>
                                                     <?php endif; ?>
@@ -441,70 +477,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                         if($item['type'] == 'delivery') $delivery = $item;
                                                     }
                                                 ?>
-                                                <div class="flex flex-col gap-2">
+                                                <div class="flex flex-col gap-3">
                                                     <!-- Pickup Assignment -->
                                                     <?php if($pickup): ?>
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="text-[9px] font-black uppercase text-muted w-12">Pickup:</span>
-                                                            <?php if ($pickup['driver_name']): ?>
-                                                                <div class="flex items-center gap-1">
-                                                                    <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($pickup['driver_name']); ?></span>
+                                                        <div class="flex items-center gap-2 min-w-[180px]">
+                                                            <span class="text-[9px] font-black uppercase text-muted w-14 shrink-0">Pickup:</span>
+                                                            <div class="flex-1 flex items-center justify-end gap-1">
+                                                                <?php if ($pickup['driver_name']): ?>
+                                                                    <span class="text-[10px] font-bold text-gray-700 truncate max-w-[80px]" title="<?php echo htmlspecialchars($pickup['driver_name']); ?>"><?php echo htmlspecialchars($pickup['driver_name']); ?></span>
                                                                     <!-- Status Indicator -->
                                                                     <?php if($pickup['status'] === 'completed'): ?>
-                                                                        <span class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100"><i class="fa-solid fa-check"></i> Done</span>
+                                                                        <span class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100 shrink-0"><i class="fa-solid fa-check"></i> Done</span>
                                                                     <?php elseif($pickup['status'] === 'in_transit'): ?>
-                                                                        <span class="text-[9px] text-blue-600 bg-blue-50 px-1 rounded border border-blue-100"><i class="fa-solid fa-truck-fast"></i> En Route</span>
+                                                                        <span class="text-[9px] text-blue-600 bg-blue-50 px-1 rounded border border-blue-100 shrink-0"><i class="fa-solid fa-truck-fast"></i> En Route</span>
                                                                     <?php elseif($pickup['status'] === 'scheduled'): ?>
-                                                                        <span class="text-[9px] text-orange-600 bg-orange-50 px-1 rounded border border-orange-100"><i class="fa-solid fa-clock"></i> Assigned</span>
+                                                                        <span class="text-[9px] text-orange-600 bg-orange-50 px-1 rounded border border-orange-100 shrink-0"><i class="fa-solid fa-clock"></i> Assigned</span>
                                                                     <?php endif; ?>
-                                                                </div>
-                                                            <?php else: ?>
-                                                                <form method="POST" class="flex items-center gap-1">
-                                                                    <input type="hidden" name="action" value="assign_driver">
-                                                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                                                    <input type="hidden" name="pd_id" value="<?php echo $pickup['id']; ?>">
-                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50 max-w-[100px]" required>
-                                                                        <option value="">Assign Driver</option>
-                                                                        <?php foreach($drivers as $d): ?>
-                                                                            <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
-                                                                        <?php endforeach; ?>
-                                                                    </select>
-                                                                    <button type="submit" class="text-primary text-[10px]"><i class="fa-solid fa-check"></i></button>
-                                                                </form>
-                                                            <?php endif; ?>
+                                                                <?php else: ?>
+                                                                    <form method="POST" class="flex items-center gap-1 w-full justify-end">
+                                                                        <input type="hidden" name="action" value="assign_driver">
+                                                                        <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                                                        <input type="hidden" name="pd_id" value="<?php echo $pickup['id']; ?>">
+                                                                        <select name="driver_user_id" class="text-[9px] py-0.5 px-1 border-gray-200 rounded bg-gray-50 flex-1 min-w-0" required>
+                                                                            <option value="">Assign</option>
+                                                                            <?php foreach($drivers as $d): ?>
+                                                                                <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
+                                                                            <?php endforeach; ?>
+                                                                        </select>
+                                                                        <button type="submit" class="text-primary text-[10px] shrink-0 p-1"><i class="fa-solid fa-check"></i></button>
+                                                                    </form>
+                                                                <?php endif; ?>
+                                                            </div>
                                                         </div>
                                                     <?php endif; ?>
 
                                                     <!-- Delivery Assignment -->
                                                     <?php if($delivery): ?>
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="text-[9px] font-black uppercase text-muted w-12">Delivery:</span>
-                                                            <?php if ($delivery['driver_name']): ?>
-                                                                <div class="flex items-center gap-1">
-                                                                    <span class="text-[10px] font-bold text-gray-700"><?php echo htmlspecialchars($delivery['driver_name']); ?></span>
+                                                        <div class="flex items-center gap-2 min-w-[180px]">
+                                                            <span class="text-[9px] font-black uppercase text-muted w-14 shrink-0">Delivery:</span>
+                                                            <div class="flex-1 flex items-center justify-end gap-1">
+                                                                <?php if ($delivery['driver_name']): ?>
+                                                                    <span class="text-[10px] font-bold text-gray-700 truncate max-w-[80px]" title="<?php echo htmlspecialchars($delivery['driver_name']); ?>"><?php echo htmlspecialchars($delivery['driver_name']); ?></span>
                                                                     <!-- Status Indicator -->
                                                                     <?php if($delivery['status'] === 'completed'): ?>
-                                                                        <span class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100"><i class="fa-solid fa-check"></i> Done</span>
+                                                                        <span class="text-[9px] text-green-600 bg-green-50 px-1 rounded border border-green-100 shrink-0"><i class="fa-solid fa-check"></i> Done</span>
                                                                     <?php elseif($delivery['status'] === 'in_transit'): ?>
-                                                                        <span class="text-[9px] text-blue-600 bg-blue-50 px-1 rounded border border-blue-100"><i class="fa-solid fa-truck-fast"></i> En Route</span>
+                                                                        <span class="text-[9px] text-blue-600 bg-blue-50 px-1 rounded border border-blue-100 shrink-0"><i class="fa-solid fa-truck-fast"></i> En Route</span>
                                                                     <?php elseif($delivery['status'] === 'scheduled'): ?>
-                                                                        <span class="text-[9px] text-orange-600 bg-orange-50 px-1 rounded border border-orange-100"><i class="fa-solid fa-clock"></i> Assigned</span>
+                                                                        <span class="text-[9px] text-orange-600 bg-orange-50 px-1 rounded border border-orange-100 shrink-0"><i class="fa-solid fa-clock"></i> Assigned</span>
                                                                     <?php endif; ?>
-                                                                </div>
-                                                            <?php else: ?>
-                                                                <form method="POST" class="flex items-center gap-1">
-                                                                    <input type="hidden" name="action" value="assign_driver">
-                                                                    <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                                                    <input type="hidden" name="pd_id" value="<?php echo $delivery['id']; ?>">
-                                                                    <select name="driver_user_id" class="text-[9px] py-0.5 border-gray-200 rounded bg-gray-50 max-w-[100px]" required>
-                                                                        <option value="">Assign Driver</option>
-                                                                        <?php foreach($drivers as $d): ?>
-                                                                            <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
-                                                                        <?php endforeach; ?>
-                                                                    </select>
-                                                                    <button type="submit" class="text-primary text-[10px]"><i class="fa-solid fa-check"></i></button>
-                                                                </form>
-                                                            <?php endif; ?>
+                                                                <?php else: ?>
+                                                                    <form method="POST" class="flex items-center gap-1 w-full justify-end">
+                                                                        <input type="hidden" name="action" value="assign_driver">
+                                                                        <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                                                        <input type="hidden" name="pd_id" value="<?php echo $delivery['id']; ?>">
+                                                                        <select name="driver_user_id" class="text-[9px] py-0.5 px-1 border-gray-200 rounded bg-gray-50 flex-1 min-w-0" required>
+                                                                            <option value="">Assign</option>
+                                                                            <?php foreach($drivers as $d): ?>
+                                                                                <option value="<?php echo $d['id']; ?>"><?php echo htmlspecialchars($d['name']); ?></option>
+                                                                            <?php endforeach; ?>
+                                                                        </select>
+                                                                        <button type="submit" class="text-primary text-[10px] shrink-0 p-1"><i class="fa-solid fa-check"></i></button>
+                                                                    </form>
+                                                                <?php endif; ?>
+                                                            </div>
                                                         </div>
                                                     <?php endif; ?>
                                                 </div>
@@ -572,9 +608,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                 </div>
                                             </td>
                                              <td class="p-3 text-center">
-                                                <div class="text-[9px] font-black leading-tight border border-gray-100 rounded-lg p-1.5 bg-gray-50/30">
+                                                <div class="text-[9px] font-black leading-tight border border-gray-100 rounded-lg p-2 bg-gray-50/30 flex flex-col items-center gap-1.5">
                                                     <?php if ($booking['payment_status'] === 'paid'): ?>
                                                         <span class="text-success flex items-center justify-center gap-1"><i class="fa-solid fa-check-circle"></i> PAID</span>
+                                                        <span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[7px] uppercase tracking-wider"><?php echo htmlspecialchars($booking['payment_method'] ?? 'Online'); ?></span>
                                                     <?php elseif ($booking['is_billed']): ?>
                                                         <span class="text-warning flex flex-col items-center gap-0.5">
                                                             <?php if ((float)($booking['final_cost'] ?? 0) > 0): ?>
@@ -582,6 +619,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                             <?php endif; ?>
                                                             <span class="text-gray-900">₹<?php echo number_format((float)($booking['final_cost'] ?? 0)); ?></span>
                                                         </span>
+                                                        <?php if ((float)($booking['final_cost'] ?? 0) > 0): ?>
+                                                        <button onclick="markAsCashPaid(<?php echo $booking['id']; ?>)" class="mt-1 px-2 py-1 bg-white hover:bg-green-50 text-green-600 border border-green-200 hover:border-green-300 rounded shadow-sm transition-all flex items-center justify-center gap-1 w-full" title="Mark as Paid via Cash">
+                                                            <i class="fa-solid fa-money-bill-wave"></i> Cash
+                                                        </button>
+                                                        <?php endif; ?>
                                                     <?php else: ?>
                                                         <span class="text-muted italic opacity-50">NOT BILLED</span>
                                                     <?php endif; ?>
@@ -734,6 +776,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <p class="text-xs font-bold text-muted uppercase tracking-widest">Calculating Charges...</p>
                 </div>
             `;
+        }
+
+        function markAsCashPaid(bookingId) {
+            if (confirm(`Are you sure you want to mark Booking #${bookingId} as paid via Cash? This action cannot be undone.`)) {
+                
+                const formData = new FormData();
+                formData.append('booking_id', bookingId);
+                
+                fetch('ajax/admin_mark_cash_paid.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An unexpected error occurred while processing the request.');
+                });
+            }
         }
     </script>
 </body>

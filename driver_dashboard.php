@@ -107,24 +107,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $custRes = executeQuery($custQuery, [$bookingId], 'i');
                 if ($cust = $custRes->fetch_assoc()) {
                     $notifMsg = "Your vehicle has arrived at our workshop and is ready for service.";
-                    executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'Vehicle Arrived', ?, 'general')", [$cust['user_id'], $notifMsg], 'is');
+                    notifyCustomer($cust['user_id'], 'Vehicle Arrived', $notifMsg, 'service', 'track_service.php');
                 }
                 
                 // Notify Admin
-                $adminRes = $conn->query("SELECT id FROM users WHERE role = 'admin'");
-                while ($admin = $adminRes->fetch_assoc()) {
-                    executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'Vehicle Arrived', 'Vehicle for Booking #$bookingId has arrived at workshop.', 'general')", [$admin['id']], 'i');
-                }
+                notifyAdmins('Vehicle Arrived', "Vehicle for Booking #$bookingId has arrived at workshop.", 'service', 'admin_bookings.php');
 
-                // Notify Assigned Mechanic (if any)
-                $mechQuery = "SELECT mechanic_id FROM bookings WHERE id = ?";
+                // Notify Assigned Mechanic (if any) or ALL Available Mechanics
+                $mechQuery = "SELECT mechanic_id, booking_number FROM bookings WHERE id = ?";
                 $mechRes = executeQuery($mechQuery, [$bookingId], 'i');
-                if (($mechRow = $mechRes->fetch_assoc()) && !empty($mechRow['mechanic_id'])) {
-                    // Get mechanic user_id
-                    $mUserQuery = "SELECT user_id FROM mechanics WHERE id = ?";
-                    $mUserRes = executeQuery($mUserQuery, [$mechRow['mechanic_id']], 'i');
-                    if ($mUser = $mUserRes->fetch_assoc()) {
-                         executeQuery("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'Vehicle Arrived', 'Vehicle for Booking #$bookingId is now at the workshop.', 'general')", [$mUser['user_id']], 'i');
+                if ($mechRow = $mechRes->fetch_assoc()) {
+                    if (!empty($mechRow['mechanic_id'])) {
+                        // Get mechanic user_id
+                        $mUserQuery = "SELECT user_id FROM mechanics WHERE id = ?";
+                        $mUserRes = executeQuery($mUserQuery, [$mechRow['mechanic_id']], 'i');
+                        if ($mUser = $mUserRes->fetch_assoc()) {
+                             notifyWorker($mUser['user_id'], 'Vehicle Arrived', "Vehicle for Booking #$bookingId is now at the workshop.", 'service', 'mechanic_dashboard.php');
+                        }
+                    } else {
+                        $bNum = $mechRow['booking_number'];
+                        if (!function_exists('notifyAvailableMechanics')) {
+                            require_once 'includes/notification_helper.php';
+                        }
+                        notifyAvailableMechanics("🔧 Vehicle Arrived", "A vehicle for Booking #$bNum has been dropped off at the workshop and needs assignment.", "mechanic_dashboard.php?tab=jobs&subtab=available");
                     }
                 }
             }

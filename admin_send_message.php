@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
             
             // Insert notifications for all recipients using helper
             foreach ($recipients as $user_id) {
-                notifyUser($user_id, $message_title, $message_content, 'message');
+                notifyUser($user_id, $message_title, $message_content, 'message', 'messages.php');
             }
             
             $conn->commit();
