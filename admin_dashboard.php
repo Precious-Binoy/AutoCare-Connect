@@ -495,10 +495,11 @@ if ($availableWorkersRes) {
                                         <tr>
                                             <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Booking</th>
                                             <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Vehicle</th>
-                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Service</th>
-                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Mechanic</th>
-                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest">Progress</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest text-center">Service</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest text-center">Mechanic</th>
+                                            <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest text-center">Progress</th>
                                             <th class="p-3 text-[10px] font-black uppercase text-muted tracking-widest text-right">Status</th>
+
                                         </tr>
                                     </thead>
                                     <tbody class="text-sm">
@@ -512,15 +513,15 @@ if ($availableWorkersRes) {
                                                     <div class="font-bold text-gray-900 text-[11px] leading-tight"><?php echo htmlspecialchars($service['year'] . ' ' . $service['make'] . ' ' . $service['model']); ?></div>
                                                     <div class="text-[9px] text-primary font-black tracking-widest mt-0.5"><?php echo htmlspecialchars($service['license_plate']); ?></div>
                                                 </td>
-                                                <td class="p-3">
+                                                <td class="p-3 text-center">
                                                     <div class="text-gray-700 text-[11px] font-medium leading-none"><?php echo htmlspecialchars($service['service_type']); ?></div>
                                                     <?php if ($service['has_pickup_delivery']): ?>
                                                         <span class="text-[8px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase font-black tracking-tighter mt-1 inline-block border border-blue-100">Logistics</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td class="p-3">
+                                                <td class="p-3 text-center">
                                                     <?php if ($service['mechanic_name']): ?>
-                                                        <div class="flex items-center gap-1.5">
+                                                        <div class="flex items-center justify-center gap-1.5">
                                                             <div class="w-5 h-5 bg-primary/10 text-primary rounded-full flex items-center justify-center text-[9px] font-black border border-primary/5">
                                                                 <?php echo strtoupper(substr($service['mechanic_name'], 0, 1)); ?>
                                                             </div>
@@ -530,14 +531,15 @@ if ($availableWorkersRes) {
                                                         <span class="text-muted text-[10px] italic">Not assigned</span>
                                                     <?php endif; ?>
                                                 </td>
-                                                <td class="p-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <div class="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden min-w-[60px]">
+                                                <td class="p-3 text-center">
+                                                    <div class="flex items-center justify-center gap-2">
+                                                        <div class="bg-gray-100 rounded-full h-1.5 overflow-hidden w-24">
                                                             <div class="bg-primary h-full transition-all duration-700" style="width: <?php echo $service['progress_percentage'] ?? 0; ?>%"></div>
                                                         </div>
                                                         <span class="text-[10px] font-black text-gray-500"><?php echo $service['progress_percentage'] ?? 0; ?>%</span>
                                                     </div>
                                                 </td>
+
                                                 <td class="p-3 text-right">
                                                     <span class="badge <?php echo getStatusBadgeClass($service['status']); ?> text-[9px] font-black uppercase px-2 py-0.5 rounded-md">
                                                         <?php echo formatStatusLabel($service['status']); ?>

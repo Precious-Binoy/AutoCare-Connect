@@ -272,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_job'])) {
 // Only show if:
 // 1. Drop-off (has_pickup_delivery = 0) and status 'pending'
 // 2. Pickup (has_pickup_delivery = 1) and status 'confirmed' (driver finished pickup)
-$availableJobsQuery = "SELECT b.*, v.make, v.model, v.year, v.license_plate, v.type, u.name as customer_name, 
+$availableJobsQuery = "SELECT b.*, v.make, v.model, v.year, v.license_plate, v.type, u.name as customer_name, u.email as customer_email, 
                               COALESCE(pd.contact_phone, u.phone) as customer_phone
                        FROM bookings b 
                        JOIN vehicles v ON b.vehicle_id = v.id 
@@ -286,6 +286,7 @@ $availableJobsQuery = "SELECT b.*, v.make, v.model, v.year, v.license_plate, v.t
                        )
                        GROUP BY b.id
                        ORDER BY b.created_at DESC";
+
 $availableJobsResult = executeQuery($availableJobsQuery, [], '');
 $availableJobs = [];
 if ($availableJobsResult) {
@@ -295,12 +296,13 @@ if ($availableJobsResult) {
 }
 
 // Fetch Active Jobs
-$activeJobsQuery = "SELECT b.*, v.make, v.model, v.year, v.license_plate, u.name as customer_name, 
+$activeJobsQuery = "SELECT b.*, v.make, v.model, v.year, v.license_plate, u.name as customer_name, u.email as customer_email, 
                            COALESCE(pd.contact_phone, u.phone) as customer_phone 
                     FROM bookings b 
                     JOIN vehicles v ON b.vehicle_id = v.id 
                     JOIN users u ON b.user_id = u.id 
                     LEFT JOIN pickup_delivery pd ON b.id = pd.booking_id AND pd.status != 'cancelled'
+
                     WHERE b.mechanic_id = ? AND b.status IN ('pending', 'confirmed', 'in_progress') 
                     GROUP BY b.id
                     ORDER BY b.preferred_date ASC";
@@ -445,12 +447,26 @@ $page_title = 'Mechanic Dashboard';
                                                             <i class="fa-solid fa-phone text-primary/70"></i> <?php echo htmlspecialchars($job['customer_phone']); ?>
                                                         </div>
                                                     <?php endif; ?>
+                                                    <?php if(!empty($job['customer_email'])): ?>
+                                                        <div class="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                                                            <i class="fa-solid fa-envelope text-primary/70"></i> <?php echo htmlspecialchars($job['customer_email']); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+
                                                 </div>
                                                 <?php if(!empty($job['customer_phone'])): ?>
-                                                    <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="btn btn-primary btn-sm rounded-xl px-4 py-2 text-[10px] shadow-lg shadow-blue-500/10 flex items-center justify-center w-10 h-10">
-                                                        <i class="fa-solid fa-phone"></i>
-                                                    </a>
+                                                    <div class="flex flex-col gap-2">
+                                                        <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="btn btn-primary btn-sm rounded-xl px-4 py-2 text-[10px] shadow-lg shadow-blue-500/10 flex items-center justify-center w-10 h-10">
+                                                            <i class="fa-solid fa-phone"></i>
+                                                        </a>
+                                                        <?php if(!empty($job['customer_email'])): ?>
+                                                            <a href="mailto:<?php echo htmlspecialchars($job['customer_email']); ?>" class="btn btn-outline btn-sm rounded-xl px-4 py-2 text-[10px] bg-white border-gray-200 flex items-center justify-center w-10 h-10 hover:border-primary hover:text-primary transition-all">
+                                                                <i class="fa-solid fa-envelope"></i>
+                                                            </a>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 <?php endif; ?>
+
                                             </div>
 
                                             <div class="bg-blue-50/50 p-5 rounded-2xl border border-blue-50 flex gap-4 transition-colors group-hover:bg-blue-50">
@@ -540,12 +556,24 @@ $page_title = 'Mechanic Dashboard';
                                                 <?php if(!empty($job['customer_phone'])): ?>
                                                     <div class="text-[11px] font-bold text-primary"><?php echo htmlspecialchars($job['customer_phone']); ?></div>
                                                 <?php endif; ?>
+                                                <?php if(!empty($job['customer_email'])): ?>
+                                                    <div class="text-[11px] font-bold text-gray-500 mt-0.5"><?php echo htmlspecialchars($job['customer_email']); ?></div>
+                                                <?php endif; ?>
+
                                             </div>
                                             <?php if(!empty($job['customer_phone'])): ?>
-                                                <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-sm">
-                                                    <i class="fa-solid fa-phone"></i>
-                                                </a>
+                                                <div class="flex flex-col gap-2">
+                                                    <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center hover:bg-primary hover:text-white transition-all shadow-sm">
+                                                        <i class="fa-solid fa-phone"></i>
+                                                    </a>
+                                                    <?php if(!empty($job['customer_email'])): ?>
+                                                        <a href="mailto:<?php echo htmlspecialchars($job['customer_email']); ?>" class="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:text-primary transition-all shadow-sm border border-gray-100">
+                                                            <i class="fa-solid fa-envelope"></i>
+                                                        </a>
+                                                    <?php endif; ?>
+                                                </div>
                                             <?php endif; ?>
+
                                         </div>
 
                                         <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6 flex-1">

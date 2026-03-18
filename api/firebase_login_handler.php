@@ -187,6 +187,10 @@ try {
         }
     }
 
+    // Regenerate session on login to clear any stale flags (e.g. payment_popup_shown_*)
+    session_regenerate_id(true);
+    $_SESSION = []; // wipe old session data
+
     // Set Session (The Login Step)
     $_SESSION['user_id'] = $user['id'] ?? $userId;
     $_SESSION['user_name'] = $user['name'] ?? $name;

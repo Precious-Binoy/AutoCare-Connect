@@ -251,7 +251,7 @@ $hasActiveTask = $hasActiveTaskRes->fetch_assoc()['active_count'] > 0;
 // Fetch Available Jobs (Sequenced)
 // 1. Pickup: status 'scheduled' and b.status 'pending' or 'confirmed'
 // 2. Delivery: status 'scheduled' and b.status 'ready_for_delivery'
-$availableJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name, 
+$availableJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name, u.email as customer_email, 
                               COALESCE(pd.contact_phone, u.phone) as customer_phone
                        FROM pickup_delivery pd 
                        JOIN bookings b ON pd.booking_id = b.id 
@@ -260,6 +260,7 @@ $availableJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status
                        WHERE pd.status = 'scheduled' 
                        AND (pd.driver_user_id IS NULL OR pd.driver_user_id = 0)
                        ORDER BY pd.created_at ASC";
+
 $availableJobsRes = executeQuery($availableJobsQuery);
 $availableJobs = [];
 if ($availableJobsRes) {
@@ -270,7 +271,7 @@ if ($availableJobsRes) {
 }
 
 // Fetch Mission History
-$historyJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name,
+$historyJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name, u.email as customer_email,
                             COALESCE(pd.contact_phone, u.phone) as customer_phone
                      FROM pickup_delivery pd
                      JOIN bookings b ON pd.booking_id = b.id
@@ -278,6 +279,7 @@ $historyJobsQuery = "SELECT pd.*, b.booking_number, b.status as booking_status, 
                      JOIN users u ON b.user_id = u.id
                      WHERE pd.driver_user_id = ? AND pd.status = 'completed'
                      ORDER BY pd.updated_at DESC LIMIT 20";
+
 $historyJobsRes = executeQuery($historyJobsQuery, [$user_id], 'i');
 $historyJobs = [];
 if ($historyJobsRes) {
@@ -391,7 +393,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_mission'])) {
 }
 
 // Fetch Active Jobs for this driver
-$activeJobsQuery = "SELECT pd.*, b.booking_number, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name, 
+$activeJobsQuery = "SELECT pd.*, b.booking_number, v.make, v.model, v.year, v.license_plate, v.color, u.name as customer_name, u.email as customer_email, 
                            COALESCE(pd.contact_phone, u.phone) as customer_phone
                     FROM pickup_delivery pd 
                     JOIN bookings b ON pd.booking_id = b.id 
@@ -404,6 +406,7 @@ $activeJobsQuery = "SELECT pd.*, b.booking_number, v.make, v.model, v.year, v.li
                         OR
                         (pd.type = 'delivery' AND b.status = 'ready_for_delivery')
                     )";
+
 $activeJobsRes = executeQuery($activeJobsQuery, [$user_id], 'i');
 $activeJobs = [];
 if ($activeJobsRes) {
@@ -643,6 +646,15 @@ $page_title = 'Driver Dashboard';
                     </div>
                 </div>
 
+                <!-- Email Row -->
+                <div class="flex items-center gap-4">
+                    <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-envelope text-sm"></i></div>
+                    <div class="text-base font-black text-slate-600 lowercase opacity-80">
+                        <?php echo htmlspecialchars($job['customer_email']); ?>
+                    </div>
+                </div>
+
+
                 <!-- Mission Phase Row -->
                 <div class="flex items-center gap-4 pt-2">
                     <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-truck text-sm"></i></div>
@@ -694,9 +706,17 @@ $page_title = 'Driver Dashboard';
                     <i class="fa-solid fa-diamond-turn-right text-lg text-blue-400 mr-3"></i> Navigate
                 </a>
                 
-                <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="btn-premium-outline flex-none h-14 px-8 w-auto">
-                    <i class="fa-solid fa-phone text-lg mr-3"></i> Call client
-                </a>
+                <div class="flex flex-col gap-2">
+                    <a href="tel:<?php echo htmlspecialchars($job['customer_phone']); ?>" class="btn-premium-outline flex-none h-14 px-8 w-auto">
+                        <i class="fa-solid fa-phone text-lg mr-3"></i> Call client
+                    </a>
+                    <?php if(!empty($job['customer_email'])): ?>
+                        <a href="mailto:<?php echo htmlspecialchars($job['customer_email']); ?>" class="btn-premium-outline flex-none h-14 px-8 w-auto bg-white border-2 border-slate-100 text-slate-500 hover:border-blue-400 hover:text-blue-500">
+                            <i class="fa-solid fa-envelope text-lg mr-3"></i> Email client
+                        </a>
+                    <?php endif; ?>
+                </div>
+
                 
                 <div class="flex-1">
                     <?php if ($job['status'] === 'scheduled'): ?>
@@ -766,6 +786,17 @@ $page_title = 'Driver Dashboard';
                                                         <?php echo htmlspecialchars(strtoupper($job['customer_name'])); ?>
                                                     </div>
                                                 </div>
+
+                                                <!-- Email Row -->
+                                                <?php if(!empty($job['customer_email'])): ?>
+                                                <div class="flex items-center gap-4">
+                                                    <div class="w-5 flex justify-center text-slate-400"><i class="fa-solid fa-envelope text-sm"></i></div>
+                                                    <div class="text-base font-black text-slate-500 lowercase opacity-70">
+                                                        <?php echo htmlspecialchars($job['customer_email']); ?>
+                                                    </div>
+                                                </div>
+                                                <?php endif; ?>
+
 
                                                 <!-- Mission Phase Row -->
                                                 <div class="flex items-center gap-4 pt-2">

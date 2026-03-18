@@ -29,6 +29,29 @@ $completedQuery = "SELECT COUNT(*) as total FROM bookings WHERE user_id = ? AND 
 $completedResult = executeQuery($completedQuery, [$userId], 'i');
 $completedServices = $completedResult ? $completedResult->fetch_assoc()['total'] : 0;
 
+// Fetch unpaid billed bookings (work completed but payment outstanding)
+$unpaidQuery = "SELECT b.id, b.booking_number, b.final_cost, b.status, b.service_type,
+                       v.make, v.model, v.year
+                FROM bookings b
+                JOIN vehicles v ON b.vehicle_id = v.id
+                WHERE b.user_id = ? AND b.is_billed = 1 AND b.payment_status != 'paid'
+                  AND b.final_cost IS NOT NULL AND b.final_cost > 0
+                ORDER BY b.created_at DESC";
+$unpaidResult = executeQuery($unpaidQuery, [$userId], 'i');
+$unpaidBills = [];
+if ($unpaidResult) {
+    while ($row = $unpaidResult->fetch_assoc()) {
+        $unpaidBills[] = $row;
+    }
+}
+$hasUnpaidBills = !empty($unpaidBills);
+
+// Only show the payment popup once per login session (not on every refresh)
+$popupSessionKey = 'payment_popup_shown_' . $userId;
+$showPaymentPopup = $hasUnpaidBills && empty($_SESSION[$popupSessionKey]);
+if ($showPaymentPopup) {
+    $_SESSION[$popupSessionKey] = true; // mark as shown so refreshes skip it
+}
 
 // Check for active deliveries with expanded driver info
 $deliveryQuery = "SELECT pd.id, pd.booking_id, pd.status, pd.driver_name, pd.driver_phone, pd.type, v.make, v.model, v.license_plate, v.color,
@@ -64,8 +87,222 @@ if ($garageResult) {
     <title>Dashboard - AutoCare Connect</title>
     <link rel="stylesheet" href="assets/css/style.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ─── Payment Pending Popup ─── */
+        #paymentPendingOverlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            animation: fadeOverlay 0.35s ease both;
+        }
+        @keyframes fadeOverlay {
+            from { opacity: 0; } to { opacity: 1; }
+        }
+        #paymentPendingModal {
+            background: #fff;
+            border-radius: 24px;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.22);
+            max-width: 500px;
+            width: 100%;
+            overflow: hidden;
+            animation: slideUpModal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        @keyframes slideUpModal {
+            from { opacity: 0; transform: translateY(40px) scale(0.95); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .ppm-header {
+            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+            padding: 28px 28px 24px;
+            position: relative;
+        }
+        .ppm-icon {
+            width: 64px;
+            height: 64px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: #fff;
+            margin-bottom: 14px;
+            border: 3px solid rgba(255,255,255,0.35);
+        }
+        .ppm-title {
+            color: #fff;
+            font-size: 1.35rem;
+            font-weight: 900;
+            margin: 0 0 4px;
+        }
+        .ppm-subtitle {
+            color: rgba(255,255,255,0.85);
+            font-size: 0.78rem;
+            font-weight: 500;
+        }
+        .ppm-body {
+            padding: 22px 28px 28px;
+        }
+        .ppm-bill-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: #fef9ec;
+            border: 1.5px solid #fde68a;
+            margin-bottom: 10px;
+            gap: 12px;
+        }
+        .ppm-bill-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .ppm-bill-ref {
+            font-size: 11px;
+            font-weight: 800;
+            color: #92400e;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .ppm-bill-service {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1f2937;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ppm-bill-cost {
+            font-size: 16px;
+            font-weight: 900;
+            color: #dc2626;
+            white-space: nowrap;
+        }
+        .ppm-pay-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 7px 14px;
+            border-radius: 9px;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 12px rgba(34,197,94,0.3);
+        }
+        .ppm-pay-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(34,197,94,0.4);
+        }
+        .ppm-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        .ppm-btn-dismiss {
+            flex: 1;
+            padding: 11px;
+            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+            background: #fff;
+            font-weight: 700;
+            font-size: 13px;
+            color: #6b7280;
+            cursor: pointer;
+            transition: border-color 0.2s, color 0.2s;
+        }
+        .ppm-btn-dismiss:hover { border-color: #d1d5db; color: #374151; }
+        .ppm-btn-pay-all {
+            flex: 1;
+            padding: 11px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: #fff;
+            font-weight: 800;
+            font-size: 13px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(239,68,68,0.3);
+            transition: opacity 0.2s, transform 0.2s;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .ppm-btn-pay-all:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* ─── Unpaid Bills Banner ─── */
+        .unpaid-bills-banner {
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            border: 2px solid #fde68a;
+            border-radius: 16px;
+            padding: 18px 20px;
+            margin-bottom: 2rem;
+        }
+        .unpaid-bill-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: #fff;
+            border-radius: 10px;
+            border: 1px solid #fde68a;
+            margin-top: 10px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+    </style>
 </head>
 <body>
+    <!-- ═══ PAYMENT PENDING POPUP ═══ -->
+    <?php if ($showPaymentPopup): ?>
+    <div id="paymentPendingOverlay">
+        <div id="paymentPendingModal">
+            <div class="ppm-header">
+                <div class="ppm-icon">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h2 class="ppm-title">Payment Pending</h2>
+                <p class="ppm-subtitle">You have <?php echo count($unpaidBills); ?> unpaid bill<?php echo count($unpaidBills) > 1 ? 's' : ''; ?> for completed service<?php echo count($unpaidBills) > 1 ? 's' : ''; ?>. Please complete your payment.</p>
+            </div>
+            <div class="ppm-body">
+                <?php foreach (array_slice($unpaidBills, 0, 3) as $bill): ?>
+                <div class="ppm-bill-item">
+                    <div class="ppm-bill-info">
+                        <div class="ppm-bill-ref">#<?php echo htmlspecialchars($bill['booking_number']); ?></div>
+                        <div class="ppm-bill-service"><?php echo htmlspecialchars($bill['service_type']); ?> &bull; <?php echo htmlspecialchars($bill['make'] . ' ' . $bill['model']); ?></div>
+                    </div>
+                    <div class="ppm-bill-cost">₹<?php echo number_format(floatval($bill['final_cost']), 2); ?></div>
+                    <a href="pay_bill.php?id=<?php echo $bill['id']; ?>" class="ppm-pay-link">
+                        <i class="fa-solid fa-credit-card"></i> Pay Now
+                    </a>
+                </div>
+                <?php endforeach; ?>
+                <?php if (count($unpaidBills) > 3): ?>
+                <p style="font-size:12px; color:#6b7280; text-align:center; margin-top:6px;">+ <?php echo count($unpaidBills) - 3; ?> more unpaid bill<?php echo (count($unpaidBills) - 3) > 1 ? 's' : ''; ?></p>
+                <?php endif; ?>
+                <div class="ppm-actions">
+                    <button class="ppm-btn-dismiss" onclick="document.getElementById('paymentPendingOverlay').style.display='none'">Remind Me Later</button>
+                    <a href="my_bookings.php" class="ppm-btn-pay-all">
+                        <i class="fa-solid fa-file-invoice-dollar"></i> View All Bills
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="dashboard-wrapper">
         <?php include 'includes/sidebar.php'; ?>
         
@@ -80,6 +317,36 @@ if ($garageResult) {
                     </div>
                     <a href="book_service.php" class="btn btn-primary btn-compact font-bold"><i class="fa-solid fa-plus mr-2"></i> Book New Service</a>
                 </div>
+
+                <?php if ($hasUnpaidBills): ?>
+                <!-- ═══ UNPAID BILLS BANNER ═══ -->
+                <div class="unpaid-bills-banner mb-6">
+                    <div class="flex items-center justify-between gap-4 flex-wrap">
+                        <div class="flex items-center gap-3">
+                            <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0;">
+                                <i class="fa-solid fa-file-invoice-dollar"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:800;font-size:14px;color:#92400e;">Unpaid Bill<?php echo count($unpaidBills) > 1 ? 's' : ''; ?> — Action Required</div>
+                                <div style="font-size:11px;color:#b45309;">You have <?php echo count($unpaidBills); ?> pending payment<?php echo count($unpaidBills) > 1 ? 's' : ''; ?> for completed service<?php echo count($unpaidBills) > 1 ? 's' : ''; ?>.</div>
+                            </div>
+                        </div>
+                        <a href="my_bookings.php" style="font-size:11px;font-weight:800;color:#92400e;text-decoration:underline;white-space:nowrap;">View All Bills <i class="fa-solid fa-arrow-right"></i></a>
+                    </div>
+                    <?php foreach ($unpaidBills as $bill): ?>
+                    <div class="unpaid-bill-row">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;">#<?php echo htmlspecialchars($bill['booking_number']); ?> &bull; <?php echo htmlspecialchars($bill['make'] . ' ' . $bill['model']); ?></div>
+                            <div style="font-size:13px;font-weight:700;color:#1f2937;"><?php echo htmlspecialchars($bill['service_type']); ?></div>
+                        </div>
+                        <div style="font-size:16px;font-weight:900;color:#dc2626;">₹<?php echo number_format(floatval($bill['final_cost']), 2); ?></div>
+                        <a href="pay_bill.php?id=<?php echo $bill['id']; ?>" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:11px;font-weight:800;padding:8px 16px;border-radius:10px;text-decoration:none;white-space:nowrap;box-shadow:0 4px 12px rgba(34,197,94,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='none'">
+                            <i class="fa-solid fa-credit-card"></i> Pay Now
+                        </a>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
 
                 <?php if ($activeDelivery): ?>
                     <div class="glass-card p-0 mb-8 overflow-hidden border-l-4 border-primary">
